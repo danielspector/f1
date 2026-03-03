@@ -1,10 +1,32 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
+import { render } from '@react-email/render'
+import React from 'react'
 import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/email'
 import { ForgotPasswordSchema } from '@/lib/validators'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import PasswordReset from '@/emails/PasswordReset'
+
+// 3 password reset requests per IP per 15 minutes
+const RATE_LIMIT = 3
+const RATE_WINDOW_MS = 15 * 60 * 1000
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request)
+    const { limited, retryAfterMs } = rateLimit(`forgot:${ip}`, RATE_LIMIT, RATE_WINDOW_MS)
+
+    if (limited) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(retryAfterMs / 1000)) },
+        },
+      )
+    }
+
     const body = await request.json()
     const parsed = ForgotPasswordSchema.safeParse(body)
 
@@ -32,8 +54,24 @@ export async function POST(request: Request) {
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`
 
-    // TODO: replace with Resend email once T-14 is wired in
-    console.log(`[Password Reset] URL for ${email}: ${resetUrl}`)
+    // Send password reset email
+    const html = await render(
+      React.createElement(PasswordReset, {
+        playerName: user.name || user.email,
+        resetUrl,
+      }),
+    )
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Reset your F1 League password',
+        html,
+      })
+    } catch (err) {
+      console.error(`[PasswordReset] Failed to send to ${email}:`, err)
+      // Don't fail the request — user can try again
+    }
 
     return NextResponse.json({ message: 'If that email exists, a reset link has been sent.' })
   } catch {

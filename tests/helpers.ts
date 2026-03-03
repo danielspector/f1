@@ -19,6 +19,9 @@ export function makeUser(
     passwordHash: string
     createdAt: Date
     updatedAt: Date
+    emailPickReminders: boolean
+    emailRaceSummaries: boolean
+    unsubscribeToken: string
   }> = {},
 ) {
   return {
@@ -28,6 +31,9 @@ export function makeUser(
     passwordHash: overrides.passwordHash ?? '$2a$12$hashedpassword',
     createdAt: overrides.createdAt ?? new Date('2026-01-01'),
     updatedAt: overrides.updatedAt ?? new Date('2026-01-01'),
+    emailPickReminders: overrides.emailPickReminders ?? true,
+    emailRaceSummaries: overrides.emailRaceSummaries ?? true,
+    unsubscribeToken: overrides.unsubscribeToken ?? `unsub_${counter}`,
   }
 }
 

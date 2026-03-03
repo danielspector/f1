@@ -62,6 +62,7 @@ describe('sendPickReminders', () => {
       expect.objectContaining({
         to: 'hasnt-picked@test.com',
         subject: expect.stringContaining('Bahrain GP'),
+        unsubscribeUrl: expect.stringContaining('unsubscribe'),
       }),
     )
   })

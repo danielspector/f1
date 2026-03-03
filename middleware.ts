@@ -1,7 +1,7 @@
 import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/unsubscribe']
 const JOIN_PATH_PREFIX = '/join/'
 
 export default auth((req) => {

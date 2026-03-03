@@ -8,8 +8,13 @@ import React from 'react'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 
+function unsubscribeUrl(token: string) {
+  return `${APP_URL}/unsubscribe?token=${token}`
+}
+
 /**
  * Sends pick reminder emails to all league members who haven't picked for the given race.
+ * Skips users who have unsubscribed from pick reminders.
  * Processes all members regardless of individual failures.
  */
 export async function sendPickReminders(raceId: string): Promise<void> {
@@ -33,6 +38,9 @@ export async function sendPickReminders(raceId: string): Promise<void> {
 
   for (const league of activeLeagues) {
     for (const member of league.members) {
+      // Skip if user has unsubscribed from pick reminders
+      if (!member.user.emailPickReminders) continue
+
       // Skip if already picked
       const hasPick = await prisma.pick.findUnique({
         where: { leagueId_userId_raceId: { leagueId: league.id, userId: member.userId, raceId } },
@@ -47,14 +55,16 @@ export async function sendPickReminders(raceId: string): Promise<void> {
           fp1Deadline: fp1DeadlineFormatted,
           leagueName: league.name,
           pickUrl,
+          unsubscribeUrl: unsubscribeUrl(member.user.unsubscribeToken),
         }),
       )
 
       try {
         await sendEmail({
           to: member.user.email,
-          subject: `⏱️ Pick reminder: ${race.name} — deadline approaching`,
+          subject: `Pick reminder: ${race.name} — deadline approaching`,
           html,
+          unsubscribeUrl: unsubscribeUrl(member.user.unsubscribeToken),
         })
         console.log(`[PickReminder] Sent to ${member.user.email} for ${race.name}`)
       } catch (err) {
@@ -67,6 +77,7 @@ export async function sendPickReminders(raceId: string): Promise<void> {
 
 /**
  * Sends post-race summary emails to all members of all active leagues.
+ * Skips users who have unsubscribed from race summaries.
  * Call this after calculateScoresForRace() has run.
  */
 export async function sendRaceSummaries(raceId: string): Promise<void> {
@@ -86,6 +97,9 @@ export async function sendRaceSummaries(raceId: string): Promise<void> {
     const leaderboard = await getLeaderboard(league.id)
 
     for (const member of league.members) {
+      // Skip if user has unsubscribed from race summaries
+      if (!member.user.emailRaceSummaries) continue
+
       const myEntry = leaderboard.find((e) => e.userId === member.userId)
       const myRaceHistory = myEntry?.history.find((h) => h.raceId === raceId)
 
@@ -107,14 +121,16 @@ export async function sendRaceSummaries(raceId: string): Promise<void> {
           leagueName: league.name,
           leagueUrl: `${APP_URL}/league/${league.id}`,
           standings,
+          unsubscribeUrl: unsubscribeUrl(member.user.unsubscribeToken),
         }),
       )
 
       try {
         await sendEmail({
           to: member.user.email,
-          subject: `🏁 ${race.name} results — ${league.name}`,
+          subject: `${race.name} results — ${league.name}`,
           html,
+          unsubscribeUrl: unsubscribeUrl(member.user.unsubscribeToken),
         })
         console.log(`[RaceSummary] Sent to ${member.user.email} for ${race.name}`)
       } catch (err) {

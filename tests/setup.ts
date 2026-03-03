@@ -57,6 +57,12 @@ vi.mock('@react-email/render', () => ({
   render: vi.fn().mockResolvedValue('<html>mock email</html>'),
 }))
 
+// Mock rate limiter — always allow in tests
+vi.mock('@/lib/rate-limit', () => ({
+  rateLimit: vi.fn().mockReturnValue({ limited: false, remaining: 10, retryAfterMs: 0 }),
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}))
+
 // Mock F1 data service
 vi.mock('@/services/f1DataService', () => ({
   fetchSeasonSchedule: vi.fn(),

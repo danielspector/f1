@@ -10,6 +10,7 @@ import {
   Section,
   Row,
   Column,
+  Link,
 } from '@react-email/components'
 
 interface StandingRow {
@@ -29,6 +30,7 @@ interface Props {
   leagueName: string
   leagueUrl: string
   standings: StandingRow[]
+  unsubscribeUrl: string
 }
 
 export default function RaceSummary({
@@ -41,6 +43,7 @@ export default function RaceSummary({
   leagueName,
   leagueUrl,
   standings,
+  unsubscribeUrl,
 }: Props) {
   const topStandings = standings.slice(0, 10)
 
@@ -52,13 +55,11 @@ export default function RaceSummary({
           <Heading style={{ color: '#e10600', fontSize: '24px', marginBottom: '4px' }}>
             F1 League
           </Heading>
-          <Text style={{ color: '#6b6b6b', fontSize: '14px', marginTop: '0' }}>
-            {leagueName}
-          </Text>
+          <Text style={{ color: '#6b6b6b', fontSize: '14px', marginTop: '0' }}>{leagueName}</Text>
           <Hr style={{ borderColor: '#2a2a2a', margin: '24px 0' }} />
 
           <Heading style={{ color: '#f5f5f5', fontSize: '20px' }}>
-            🏁 Round {round} — {raceName}
+            Round {round} — {raceName}
           </Heading>
 
           <Text style={{ color: '#d4d4d4', fontSize: '16px' }}>Hi {playerName},</Text>
@@ -76,13 +77,17 @@ export default function RaceSummary({
             <Text style={{ color: '#6b6b6b', fontSize: '12px', margin: '0 0 4px' }}>YOUR PICK</Text>
             {driverPicked ? (
               <>
-                <Text style={{ color: '#ffffff', fontSize: '18px', fontWeight: 'bold', margin: '0' }}>
+                <Text
+                  style={{ color: '#ffffff', fontSize: '18px', fontWeight: 'bold', margin: '0' }}
+                >
                   {driverPicked}
                 </Text>
                 <Text style={{ color: '#9ca3af', fontSize: '13px', margin: '4px 0 12px' }}>
                   {teamName}
                 </Text>
-                <Text style={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold', margin: '0' }}>
+                <Text
+                  style={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold', margin: '0' }}
+                >
                   {pointsEarned}
                   <span style={{ fontSize: '16px', color: '#6b6b6b', marginLeft: '6px' }}>pts</span>
                 </Text>
@@ -119,8 +124,11 @@ export default function RaceSummary({
                 <Column style={{ width: '30px', color: '#6b6b6b', fontSize: '13px' }}>
                   {row.rank}
                 </Column>
-                <Column style={{ color: row.isCurrentUser ? '#ffffff' : '#d4d4d4', fontSize: '14px' }}>
-                  {row.name}{row.isCurrentUser ? ' (you)' : ''}
+                <Column
+                  style={{ color: row.isCurrentUser ? '#ffffff' : '#d4d4d4', fontSize: '14px' }}
+                >
+                  {row.name}
+                  {row.isCurrentUser ? ' (you)' : ''}
                 </Column>
                 <Column
                   style={{
@@ -150,13 +158,18 @@ export default function RaceSummary({
                 display: 'inline-block',
               }}
             >
-              View full standings →
+              View full standings
             </Button>
           </Section>
 
           <Hr style={{ borderColor: '#2a2a2a', margin: '24px 0' }} />
-          <Text style={{ color: '#6b6b6b', fontSize: '12px' }}>
+          <Text style={{ color: '#6b6b6b', fontSize: '12px', lineHeight: '1.5' }}>
             You&apos;re receiving this because you&apos;re a member of {leagueName} on F1 League.
+          </Text>
+          <Text style={{ color: '#6b6b6b', fontSize: '12px', lineHeight: '1.5', marginTop: '4px' }}>
+            <Link href={unsubscribeUrl} style={{ color: '#6b6b6b', textDecoration: 'underline' }}>
+              Manage email preferences or unsubscribe
+            </Link>
           </Text>
         </Container>
       </Body>

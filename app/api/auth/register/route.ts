@@ -2,17 +2,32 @@ import { NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { RegisterSchema } from '@/lib/validators'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
+
+// 5 registration attempts per IP per 15 minutes
+const RATE_LIMIT = 5
+const RATE_WINDOW_MS = 15 * 60 * 1000
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request)
+    const { limited, retryAfterMs } = rateLimit(`register:${ip}`, RATE_LIMIT, RATE_WINDOW_MS)
+
+    if (limited) {
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(retryAfterMs / 1000)) },
+        },
+      )
+    }
+
     const body = await request.json()
     const parsed = RegisterSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
     const { name, email, password } = parsed.data

@@ -17,6 +17,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Email notification preferences
+  emailPickReminders  Boolean @default(true)
+  emailRaceSummaries  Boolean @default(true)
+  unsubscribeToken    String  @unique @default(cuid())
+
   leagueMembers      LeagueMember[]
   picks              Pick[]
   scores             PlayerScore[]
