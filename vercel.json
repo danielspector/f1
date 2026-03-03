@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/pick-reminder",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/ingest-results",
-      "schedule": "0 */2 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/archive-season",

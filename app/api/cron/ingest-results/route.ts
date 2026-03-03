@@ -14,12 +14,12 @@ export async function GET(request: Request) {
   }
 
   const now = new Date()
-  const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-  // Find races that ended in the last 6 hours and don't yet have results
+  // Find races that ended in the last 24 hours and don't yet have results
   const races = await prisma.race.findMany({
     where: {
-      raceDatetime: { gte: sixHoursAgo, lte: now },
+      raceDatetime: { gte: twentyFourHoursAgo, lte: now },
       results: { none: {} }, // no results yet
     },
   })
