@@ -133,15 +133,7 @@ export async function POST(request: Request, { params }: Params) {
     )
   }
 
-  // 3. Check not already submitted for this race
-  const existingPick = await prisma.pick.findUnique({
-    where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
-  })
-  if (existingPick) {
-    return NextResponse.json({ error: 'You have already submitted a pick for this race' }, { status: 400 })
-  }
-
-  // 4. Verify seat is available
+  // 3. Verify seat is available (prior picks excluding current race, so changing is allowed)
   const { availableSeats } = await getAvailableSeats(leagueId, userId, raceId, race.seasonYear)
   const isAvailable = availableSeats.some((s) => s.id === seatId)
   if (!isAvailable) {
@@ -151,8 +143,10 @@ export async function POST(request: Request, { params }: Params) {
     )
   }
 
-  const pick = await prisma.pick.create({
-    data: { leagueId, userId, raceId, seatId },
+  const pick = await prisma.pick.upsert({
+    where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
+    update: { seatId },
+    create: { leagueId, userId, raceId, seatId },
     include: { seat: true, race: true },
   })
 

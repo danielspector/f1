@@ -171,10 +171,11 @@ export default function DriverSelector({
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 max-w-sm w-full">
             <h3 className="text-white font-semibold text-lg mb-1">Confirm your pick</h3>
             <p className="text-gray-400 text-sm mb-4">
-              Pick <span className="text-white font-medium">{confirming.driverName}</span> for{' '}
+              {currentPickSeatId ? 'Change your pick to ' : 'Pick '}
+              <span className="text-white font-medium">{confirming.driverName}</span> for{' '}
               <span className="text-white font-medium">{raceName}</span>?
               <br />
-              <span className="text-gray-500 text-xs mt-1 block">This cannot be changed once confirmed.</span>
+              <span className="text-gray-500 text-xs mt-1 block">You can change your pick any time before the deadline.</span>
             </p>
 
             <div className="flex gap-3">
@@ -190,7 +191,7 @@ export default function DriverSelector({
                 disabled={submitting}
                 className="flex-1 bg-[#e10600] hover:bg-[#b00500] disabled:opacity-50 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors"
               >
-                {submitting ? 'Confirming…' : 'Confirm pick'}
+                {submitting ? 'Saving…' : currentPickSeatId ? 'Change pick' : 'Confirm pick'}
               </button>
             </div>
           </div>

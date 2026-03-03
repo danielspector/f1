@@ -151,7 +151,7 @@ export default function PickPage() {
         <div>
           {currentPickSeatId && (
             <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 mb-4 text-sm text-green-300">
-              ✓ Pick submitted — you can view your selection below.
+              ✓ Pick submitted — you can change it any time before the deadline.
             </div>
           )}
           <DriverSelector

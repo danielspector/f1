@@ -23,6 +23,7 @@ const mockGetAvailableSeats = vi.mocked(getAvailableSeats)
 // Valid CUID-like IDs that pass z.string().cuid() validation
 const RACE_ID = 'cm5abc123def456ghi789'
 const SEAT_ID = 'cm5xyz789abc123def456'
+const NEW_SEAT_ID = 'cm5new789abc123def999'
 
 function mockAuthenticatedUser(userId: string) {
   mockRequireSession.mockResolvedValue({
@@ -70,7 +71,7 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
       currentPickSeatId: null,
     })
 
-    db.pick.create.mockResolvedValue({
+    db.pick.upsert.mockResolvedValue({
       id: 'pick1',
       seatId: SEAT_ID,
       raceId: RACE_ID,
@@ -127,7 +128,51 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
     expect(response.status).toBe(400)
   })
 
-  it('prevents duplicate pick for the same race', async () => {
+  // Changing a pick before deadline
+  it('allows changing an existing pick to a different driver before the deadline', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    const originalSeat = makeSeat({ id: SEAT_ID, driverName: 'Norris', driverCode: 'NOR', teamName: 'McLaren' })
+    const newSeat = makeSeat({ id: NEW_SEAT_ID, driverName: 'Piastri', driverCode: 'PIA', teamName: 'McLaren' })
+    const fullGrid = [originalSeat, newSeat, ...makeFullGrid().slice(2)]
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z') }),
+    )
+    // User already has a pick for this race — all seats available for changing
+    mockGetAvailableSeats.mockResolvedValue({
+      availableSeats: fullGrid,
+      currentPickSeatId: SEAT_ID,
+    })
+    db.pick.upsert.mockResolvedValue({
+      id: 'pick1',
+      seatId: NEW_SEAT_ID,
+      raceId: RACE_ID,
+      seat: newSeat,
+      race: makeRace({ id: RACE_ID }),
+    } as any)
+
+    const request = new Request('http://localhost/api/leagues/l1/picks', {
+      method: 'POST',
+      body: JSON.stringify({ raceId: RACE_ID, seatId: NEW_SEAT_ID }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
+    expect(response.status).toBe(201)
+
+    const body = await response.json()
+    expect(body.seatId).toBe(NEW_SEAT_ID)
+    expect(db.pick.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { leagueId_userId_raceId: { leagueId: 'l1', userId: 'user1', raceId: RACE_ID } },
+        update: { seatId: NEW_SEAT_ID },
+      }),
+    )
+  })
+
+  it('rejects changing a pick to a seat used in a prior race', async () => {
     vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
     mockAuthenticatedUser('user1')
 
@@ -135,20 +180,23 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
     db.race.findUnique.mockResolvedValue(
       makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z') }),
     )
-    db.pick.findUnique.mockResolvedValue(
-      makePick({ id: 'existing' }), // already has a pick
-    )
+    // SEAT_ID was used in a prior race — not in available list
+    const otherSeat = makeSeat({ id: NEW_SEAT_ID })
+    mockGetAvailableSeats.mockResolvedValue({
+      availableSeats: [otherSeat],
+      currentPickSeatId: NEW_SEAT_ID,
+    })
 
     const request = new Request('http://localhost/api/leagues/l1/picks', {
       method: 'POST',
-      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID }),
+      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID }), // SEAT_ID not available
     })
 
     const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
     expect(response.status).toBe(400)
 
     const body = await response.json()
-    expect(body.error).toContain('already submitted')
+    expect(body.error).toContain('not available')
   })
 
   // FR-07: A player cannot reuse a driver seat
