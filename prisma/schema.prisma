@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leagueMembers      LeagueMember[]
+  picks              Pick[]
+  scores             PlayerScore[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Leagues ─────────────────────────────────────────────────────────────────
+
+enum LeagueStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MemberRole {
+  MEMBER
+  ADMIN
+}
+
+model League {
+  id          String       @id @default(cuid())
+  name        String
+  inviteCode  String       @unique @default(cuid())
+  seasonYear  Int
+  status      LeagueStatus @default(ACTIVE)
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members LeagueMember[]
+  picks   Pick[]
+  scores  PlayerScore[]
+}
+
+model LeagueMember {
+  id       String     @id @default(cuid())
+  leagueId String
+  userId   String
+  role     MemberRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+}
+
+// ─── Races & Seats ───────────────────────────────────────────────────────────
+
+model Race {
+  id           String   @id @default(cuid())
+  seasonYear   Int
+  round        Int
+  name         String
+  circuit      String
+  fp1Deadline  DateTime // UTC datetime of FP1 session start
+  raceDatetime DateTime
+
+  results RaceResult[]
+  picks   Pick[]
+
+  @@unique([seasonYear, round])
+  @@index([seasonYear, round])
+}
+
+model Seat {
+  id         String @id @default(cuid())
+  seasonYear Int
+  teamName   String
+  driverName String
+  driverCode String // e.g. "VER", "HAM"
+
+  results RaceResult[]
+  picks   Pick[]
+
+  @@unique([seasonYear, driverCode])
+}
+
+// ─── Picks ───────────────────────────────────────────────────────────────────
+
+model Pick {
+  id          String   @id @default(cuid())
+  leagueId    String
+  userId      String
+  raceId      String
+  seatId      String
+  submittedAt DateTime @default(now())
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race   Race   @relation(fields: [raceId], references: [id])
+  seat   Seat   @relation(fields: [seatId], references: [id])
+  score  PlayerScore?
+
+  @@unique([leagueId, userId, raceId])
+  @@index([leagueId, userId, raceId])
+}
+
+// ─── Results & Scores ────────────────────────────────────────────────────────
+
+model RaceResult {
+  id       String @id @default(cuid())
+  raceId   String
+  seatId   String
+  position Int? // null = DNF/DNS
+  points   Int  @default(0)
+
+  race Race @relation(fields: [raceId], references: [id])
+  seat Seat @relation(fields: [seatId], references: [id])
+
+  @@unique([raceId, seatId])
+}
+
+model PlayerScore {
+  id           String @id @default(cuid())
+  leagueId     String
+  userId       String
+  raceId       String
+  pickId       String @unique
+  pointsEarned Int    @default(0)
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pick   Pick   @relation(fields: [pickId], references: [id])
+
+  @@unique([leagueId, userId, raceId])
+  @@index([leagueId, userId])
+}
