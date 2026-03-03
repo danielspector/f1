@@ -197,6 +197,7 @@ export default function LeaguePage() {
             leagueName={league.name}
             inviteCode={league.inviteCode}
             members={members}
+            races={races}
             currentUserId={session?.user?.id ?? ''}
             onLeagueRenamed={(name) => setLeague({ ...league, name })}
             onMemberRemoved={(userId) =>

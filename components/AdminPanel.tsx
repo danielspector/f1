@@ -10,11 +10,24 @@ interface Member {
   role: 'ADMIN' | 'MEMBER'
 }
 
+interface Race {
+  id: string
+  round: number
+  name: string
+}
+
+interface Seat {
+  id: string
+  driverName: string
+  teamName: string
+}
+
 interface Props {
   leagueId: string
   leagueName: string
   inviteCode: string
   members: Member[]
+  races: Race[]
   currentUserId: string
   onLeagueRenamed: (name: string) => void
   onMemberRemoved: (userId: string) => void
@@ -26,6 +39,7 @@ export default function AdminPanel({
   leagueName,
   inviteCode,
   members,
+  races,
   currentUserId,
   onLeagueRenamed,
   onMemberRemoved,
@@ -35,6 +49,47 @@ export default function AdminPanel({
   const [renaming, setRenaming] = useState(false)
   const [nameError, setNameError] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Admin pick entry state
+  const [adminPick, setAdminPick] = useState({ userId: '', raceId: '', seatId: '' })
+  const [adminPickSeats, setAdminPickSeats] = useState<Seat[]>([])
+  const [adminPickLoading, setAdminPickLoading] = useState(false)
+  const [adminPickError, setAdminPickError] = useState('')
+  const [adminPickSuccess, setAdminPickSuccess] = useState('')
+
+  async function loadSeats(raceId: string) {
+    setAdminPickSeats([])
+    setAdminPick((p) => ({ ...p, raceId, seatId: '' }))
+    if (!raceId) return
+    const res = await fetch(`/api/leagues/${leagueId}/picks?raceId=${raceId}`)
+    if (res.ok) {
+      const data = await res.json()
+      const sorted = [...(data.seats ?? [])].sort((a: Seat, b: Seat) =>
+        a.teamName.localeCompare(b.teamName) || a.driverName.localeCompare(b.driverName),
+      )
+      setAdminPickSeats(sorted)
+    }
+  }
+
+  async function handleAdminPick(e: React.FormEvent) {
+    e.preventDefault()
+    if (!adminPick.userId || !adminPick.raceId || !adminPick.seatId) return
+    setAdminPickLoading(true)
+    setAdminPickError('')
+    setAdminPickSuccess('')
+
+    const res = await fetch(`/api/leagues/${leagueId}/admin/picks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adminPick),
+    })
+    const data = await res.json()
+    setAdminPickLoading(false)
+
+    if (!res.ok) return setAdminPickError(data.error || 'Failed to save pick')
+    setAdminPickSuccess(`Saved: ${data.seat.driverName} for ${data.race.name}`)
+    setAdminPick((p) => ({ ...p, seatId: '' }))
+  }
 
   async function handleRename(e: React.FormEvent) {
     e.preventDefault()
@@ -105,6 +160,65 @@ export default function AdminPanel({
       <div>
         <h3 className="text-sm font-medium text-gray-300 mb-3">Invite link</h3>
         <InviteLink inviteCode={inviteCode} />
+      </div>
+
+      {/* Enter pick for member */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-300 mb-3">Enter pick for member</h3>
+        <form onSubmit={handleAdminPick} className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <select
+              value={adminPick.userId}
+              onChange={(e) => setAdminPick((p) => ({ ...p, userId: e.target.value }))}
+              className="bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#e10600] transition-colors"
+            >
+              <option value="">Select player…</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.userName || m.userEmail}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={adminPick.raceId}
+              onChange={(e) => loadSeats(e.target.value)}
+              className="bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#e10600] transition-colors"
+            >
+              <option value="">Select race…</option>
+              {races.map((r) => (
+                <option key={r.id} value={r.id}>
+                  R{r.round} — {r.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={adminPick.seatId}
+              onChange={(e) => setAdminPick((p) => ({ ...p, seatId: e.target.value }))}
+              disabled={adminPickSeats.length === 0}
+              className="bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#e10600] transition-colors disabled:opacity-40"
+            >
+              <option value="">Select driver…</option>
+              {adminPickSeats.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.driverName} ({s.teamName})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {adminPickError && <p className="text-red-400 text-xs">{adminPickError}</p>}
+          {adminPickSuccess && <p className="text-green-400 text-xs">{adminPickSuccess}</p>}
+
+          <button
+            type="submit"
+            disabled={!adminPick.userId || !adminPick.raceId || !adminPick.seatId || adminPickLoading}
+            className="bg-[#2a2a2a] hover:bg-[#3a3a3a] disabled:opacity-40 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            {adminPickLoading ? 'Saving…' : 'Save pick'}
+          </button>
+        </form>
       </div>
 
       {/* Members */}
