@@ -18,6 +18,7 @@ export interface LeaderboardEntry {
   totalPoints: number
   rank: number
   history: RaceHistoryEntry[]
+  hasCurrentPick: boolean
 }
 
 export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry[]> {
@@ -36,6 +37,14 @@ export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry
     where: { seasonYear: league.seasonYear },
     orderBy: { round: 'asc' },
   })
+
+  // Find the currently open race (FP1 deadline in the future, within 7 days)
+  const now = new Date()
+  const openRace = races.find((r) => {
+    const fp1 = new Date(r.fp1Deadline)
+    const daysUntilFP1 = (fp1.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    return fp1 > now && daysUntilFP1 <= 7
+  }) ?? null
 
   const entries: Omit<LeaderboardEntry, 'rank'>[] = await Promise.all(
     members.map(async (member) => {
@@ -107,6 +116,7 @@ export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry
       history.sort((a, b) => a.round - b.round)
 
       const totalPoints = scores.reduce((sum, s) => sum + s.pointsEarned, 0)
+      const hasCurrentPick = openRace ? picks.some((p) => p.raceId === openRace.id) : false
 
       return {
         userId: member.userId,
@@ -114,6 +124,7 @@ export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry
         userEmail: member.user.email,
         totalPoints,
         history,
+        hasCurrentPick,
       }
     }),
   )

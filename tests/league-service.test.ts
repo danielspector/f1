@@ -216,6 +216,110 @@ describe('getLeaderboard', () => {
     expect(player.history[0].driverName).toBeNull() // no driver picked
   })
 
+  // hasCurrentPick — indicates whether a player has submitted a pick for the open race week
+  it('sets hasCurrentPick to true for a player who has picked for the open race', async () => {
+    vi.setSystemTime(new Date('2026-06-15T00:00:00Z'))
+    db.league.findUnique.mockResolvedValue({ seasonYear: 2026 } as any)
+
+    const user1 = makeUser({ id: 'user1', name: 'Player', email: 'p@test.com' })
+    db.leagueMember.findMany.mockResolvedValue([{ userId: 'user1', user: user1 }] as any)
+
+    const openRace = makeRace({
+      id: 'r_open',
+      round: 10,
+      fp1Deadline: new Date('2026-06-18T10:00:00Z'), // 3 days away — picking_open
+      raceDatetime: new Date('2026-06-20T14:00:00Z'),
+    })
+    db.race.findMany.mockResolvedValue([openRace])
+    db.playerScore.findMany.mockResolvedValue([])
+
+    // Player has submitted a pick for the open race
+    db.pick.findMany.mockResolvedValue([
+      { raceId: 'r_open', race: openRace, seat: makeSeat() },
+    ] as any)
+
+    const leaderboard = await getLeaderboard('league1')
+    expect(leaderboard[0].hasCurrentPick).toBe(true)
+  })
+
+  it('sets hasCurrentPick to false for a player who has not picked for the open race', async () => {
+    vi.setSystemTime(new Date('2026-06-15T00:00:00Z'))
+    db.league.findUnique.mockResolvedValue({ seasonYear: 2026 } as any)
+
+    const user1 = makeUser({ id: 'user1', name: 'Player', email: 'p@test.com' })
+    db.leagueMember.findMany.mockResolvedValue([{ userId: 'user1', user: user1 }] as any)
+
+    const openRace = makeRace({
+      id: 'r_open',
+      round: 10,
+      fp1Deadline: new Date('2026-06-18T10:00:00Z'),
+      raceDatetime: new Date('2026-06-20T14:00:00Z'),
+    })
+    db.race.findMany.mockResolvedValue([openRace])
+    db.playerScore.findMany.mockResolvedValue([])
+    db.pick.findMany.mockResolvedValue([]) // no picks submitted
+
+    const leaderboard = await getLeaderboard('league1')
+    expect(leaderboard[0].hasCurrentPick).toBe(false)
+  })
+
+  it('sets hasCurrentPick to false when no race is currently open for picking', async () => {
+    vi.setSystemTime(new Date('2026-06-15T00:00:00Z'))
+    db.league.findUnique.mockResolvedValue({ seasonYear: 2026 } as any)
+
+    const user1 = makeUser({ id: 'user1', name: 'Player', email: 'p@test.com' })
+    db.leagueMember.findMany.mockResolvedValue([{ userId: 'user1', user: user1 }] as any)
+
+    // Only a far-future race (more than 7 days away — "upcoming", not "picking_open")
+    const upcomingRace = makeRace({
+      id: 'r_far',
+      round: 12,
+      fp1Deadline: new Date('2026-07-10T10:00:00Z'), // 25 days away
+      raceDatetime: new Date('2026-07-12T14:00:00Z'),
+    })
+    db.race.findMany.mockResolvedValue([upcomingRace])
+    db.playerScore.findMany.mockResolvedValue([])
+    db.pick.findMany.mockResolvedValue([])
+
+    const leaderboard = await getLeaderboard('league1')
+    expect(leaderboard[0].hasCurrentPick).toBe(false)
+  })
+
+  it('correctly differentiates hasCurrentPick between players who have and have not picked', async () => {
+    vi.setSystemTime(new Date('2026-06-15T00:00:00Z'))
+    db.league.findUnique.mockResolvedValue({ seasonYear: 2026 } as any)
+
+    const user1 = makeUser({ id: 'user1', name: 'Has Picked', email: 'a@test.com' })
+    const user2 = makeUser({ id: 'user2', name: 'Not Picked', email: 'b@test.com' })
+    db.leagueMember.findMany.mockResolvedValue([
+      { userId: 'user1', user: user1 },
+      { userId: 'user2', user: user2 },
+    ] as any)
+
+    const openRace = makeRace({
+      id: 'r_open',
+      round: 10,
+      fp1Deadline: new Date('2026-06-18T10:00:00Z'),
+      raceDatetime: new Date('2026-06-20T14:00:00Z'),
+    })
+    db.race.findMany.mockResolvedValue([openRace])
+    db.playerScore.findMany.mockResolvedValue([])
+
+    db.pick.findMany.mockImplementation(({ where }: any) => {
+      if (where.userId === 'user1') {
+        return Promise.resolve([{ raceId: 'r_open', race: openRace, seat: makeSeat() }])
+      }
+      return Promise.resolve([]) // user2 hasn't picked
+    })
+
+    const leaderboard = await getLeaderboard('league1')
+    const entry1 = leaderboard.find((e) => e.userId === 'user1')!
+    const entry2 = leaderboard.find((e) => e.userId === 'user2')!
+
+    expect(entry1.hasCurrentPick).toBe(true)
+    expect(entry2.hasCurrentPick).toBe(false)
+  })
+
   it('does not include future races in history', async () => {
     db.league.findUnique.mockResolvedValue({ seasonYear: 2026 } as any)
 

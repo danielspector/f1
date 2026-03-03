@@ -55,6 +55,11 @@ export default function Leaderboard({ entries, currentUserId }: Props) {
                 </span>
               </div>
 
+              {/* Current race pick indicator */}
+              {entry.hasCurrentPick && (
+                <span className="shrink-0 text-xs text-green-500 font-medium">✓ picked</span>
+              )}
+
               {/* Points */}
               <div className="shrink-0 text-right">
                 <span className="text-white font-bold tabular-nums">{entry.totalPoints}</span>
