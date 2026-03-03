@@ -87,7 +87,10 @@ function LoginForm() {
 
       <p className="text-sm text-gray-500 text-center mt-5">
         Don&apos;t have an account?{' '}
-        <Link href="/register" className="text-[#e10600] hover:underline">
+        <Link
+          href={callbackUrl !== '/dashboard' ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/register'}
+          className="text-[#e10600] hover:underline"
+        >
           Create one
         </Link>
       </p>

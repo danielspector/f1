@@ -160,9 +160,28 @@ export default function LeaguePage() {
         </div>
 
         {/* Tab content */}
-        {tab === 'standings' && (
-          <Leaderboard entries={league.leaderboard} currentUserId={session?.user?.id ?? ''} />
-        )}
+        {tab === 'standings' && (() => {
+          const openRaceWithoutPick = !isArchived
+            ? races.find(r => r.status === 'picking_open' && !userPicks.some(p => p.raceId === r.id))
+            : null
+          return (
+            <>
+              {openRaceWithoutPick && (
+                <Link
+                  href={`/league/${id}/pick/${openRaceWithoutPick.id}`}
+                  className="flex items-center justify-between bg-[#e10600]/10 border border-[#e10600]/30 rounded-xl px-4 py-3 mb-4 hover:bg-[#e10600]/15 transition-colors"
+                >
+                  <div>
+                    <p className="text-white text-sm font-medium">You haven&apos;t picked for {openRaceWithoutPick.name}</p>
+                    <p className="text-gray-400 text-xs mt-0.5">Deadline: {new Date(openRaceWithoutPick.fp1Deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                  </div>
+                  <span className="text-[#e10600] text-sm font-medium shrink-0 ml-4">Make pick →</span>
+                </Link>
+              )}
+              <Leaderboard entries={league.leaderboard} currentUserId={session?.user?.id ?? ''} />
+            </>
+          )
+        })()}
 
         {tab === 'calendar' && (
           <RaceCalendar

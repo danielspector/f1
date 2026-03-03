@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -45,7 +47,7 @@ export default function RegisterPage() {
       })
 
       if (signInResult?.error) return setError('Registration succeeded but sign-in failed')
-      router.push('/dashboard')
+      router.push(callbackUrl)
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
@@ -123,10 +125,21 @@ export default function RegisterPage() {
 
       <p className="text-sm text-gray-500 text-center mt-5">
         Already have an account?{' '}
-        <Link href="/login" className="text-[#e10600] hover:underline">
+        <Link
+          href={callbackUrl !== '/dashboard' ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'}
+          className="text-[#e10600] hover:underline"
+        >
           Sign in
         </Link>
       </p>
     </div>
+  )
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   )
 }
