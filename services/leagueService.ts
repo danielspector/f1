@@ -38,12 +38,11 @@ export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry
     orderBy: { round: 'asc' },
   })
 
-  // Find the currently open race (FP1 deadline in the future, within 7 days)
+  // Find the next race still open for picking (FP1 deadline in the future)
   const now = new Date()
   const openRace = races.find((r) => {
     const fp1 = new Date(r.fp1Deadline)
-    const daysUntilFP1 = (fp1.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    return fp1 > now && daysUntilFP1 <= 7
+    return fp1 > now
   }) ?? null
 
   const entries: Omit<LeaderboardEntry, 'rank'>[] = await Promise.all(

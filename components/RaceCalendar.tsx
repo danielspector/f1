@@ -10,11 +10,12 @@ interface RaceWithStatus {
   circuit: string
   fp1Deadline: string
   raceDatetime: string
-  status: 'upcoming' | 'picking_open' | 'locked' | 'results_in'
+  status: 'picking_open' | 'locked' | 'results_in'
 }
 
 interface UserPick {
   raceId: string
+  driverCode: string
 }
 
 interface Props {
@@ -24,14 +25,12 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<RaceWithStatus['status'], string> = {
-  upcoming: 'Upcoming',
   picking_open: 'Pick now',
   locked: 'Locked',
   results_in: 'Results in',
 }
 
 const STATUS_COLORS: Record<RaceWithStatus['status'], string> = {
-  upcoming: 'text-gray-500 bg-[#2a2a2a]',
   picking_open: 'text-orange-300 bg-orange-900/30',
   locked: 'text-gray-500 bg-[#2a2a2a]',
   results_in: 'text-green-300 bg-green-900/20',
@@ -64,7 +63,7 @@ function Countdown({ deadline }: { deadline: string }) {
 }
 
 export default function RaceCalendar({ races, userPicks, leagueId }: Props) {
-  const picksByRaceId = new Set(userPicks.map((p) => p.raceId))
+  const picksByRaceId = new Map(userPicks.map((p) => [p.raceId, p]))
 
   const nextPickableRace = races.find((r) => r.status === 'picking_open')
 
@@ -77,7 +76,8 @@ export default function RaceCalendar({ races, userPicks, leagueId }: Props) {
   return (
     <div className="space-y-2">
       {races.map((race) => {
-        const hasPick = picksByRaceId.has(race.id)
+        const pick = picksByRaceId.get(race.id)
+        const hasPick = !!pick
         const isNext = race.id === nextPickableRace?.id
         const canPick = race.status === 'picking_open'
 
@@ -118,11 +118,14 @@ export default function RaceCalendar({ races, userPicks, leagueId }: Props) {
 
               {/* Status & action */}
               <div className="shrink-0 flex flex-col items-end gap-1.5">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[race.status]}`}>
-                  {STATUS_LABELS[race.status]}
-                </span>
-                {hasPick && (
-                  <span className="text-xs text-green-400">✓ Pick in</span>
+                {canPick && hasPick ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full text-green-300 bg-green-900/20">
+                    ✓ {pick.driverCode}
+                  </span>
+                ) : (
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[race.status]}`}>
+                    {STATUS_LABELS[race.status]}
+                  </span>
                 )}
                 {canPick && !hasPick && (
                   <Link
@@ -132,7 +135,15 @@ export default function RaceCalendar({ races, userPicks, leagueId }: Props) {
                     Pick →
                   </Link>
                 )}
-                {(race.status === 'locked' || race.status === 'results_in') && hasPick && (
+                {canPick && hasPick && (
+                  <Link
+                    href={`/league/${leagueId}/pick/${race.id}`}
+                    className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                  >
+                    Change →
+                  </Link>
+                )}
+                {!canPick && hasPick && (
                   <Link
                     href={`/league/${leagueId}/pick/${race.id}`}
                     className="text-xs text-gray-500 hover:text-gray-300 transition-colors"

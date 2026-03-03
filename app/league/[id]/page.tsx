@@ -28,10 +28,10 @@ interface RaceItem {
   circuit: string
   fp1Deadline: string
   raceDatetime: string
-  status: 'upcoming' | 'picking_open' | 'locked' | 'results_in'
+  status: 'picking_open' | 'locked' | 'results_in'
 }
 
-interface PickItem { raceId: string }
+interface PickItem { raceId: string; driverCode: string; driverName: string }
 
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>()
@@ -60,7 +60,11 @@ export default function LeaguePage() {
 
       setLeague(leagueData)
       setRaces(racesData)
-      setUserPicks(picksData.map((p: { raceId: string }) => ({ raceId: p.raceId })))
+      setUserPicks(picksData.map((p: { raceId: string; seat?: { driverCode: string; driverName: string } }) => ({
+        raceId: p.raceId,
+        driverCode: p.seat?.driverCode ?? '',
+        driverName: p.seat?.driverName ?? '',
+      })))
       setLoading(false)
     }
     load()
@@ -161,21 +165,28 @@ export default function LeaguePage() {
 
         {/* Tab content */}
         {tab === 'standings' && (() => {
-          const openRaceWithoutPick = !isArchived
-            ? races.find(r => r.status === 'picking_open' && !userPicks.some(p => p.raceId === r.id))
+          const openRace = !isArchived
+            ? races.find(r => r.status === 'picking_open')
             : null
+          const pickForOpenRace = openRace ? userPicks.find(p => p.raceId === openRace.id) : null
           return (
             <>
-              {openRaceWithoutPick && (
+              {openRace && (
                 <Link
-                  href={`/league/${id}/pick/${openRaceWithoutPick.id}`}
+                  href={`/league/${id}/pick/${openRace.id}`}
                   className="flex items-center justify-between bg-[#e10600]/10 border border-[#e10600]/30 rounded-xl px-4 py-3 mb-4 hover:bg-[#e10600]/15 transition-colors"
                 >
                   <div>
-                    <p className="text-white text-sm font-medium">You haven&apos;t picked for {openRaceWithoutPick.name}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">Deadline: {new Date(openRaceWithoutPick.fp1Deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                    <p className="text-white text-sm font-medium">
+                      {pickForOpenRace
+                        ? `${openRace.name} — ${pickForOpenRace.driverName}`
+                        : `You haven\u0027t picked for ${openRace.name}`}
+                    </p>
+                    <p className="text-gray-400 text-xs mt-0.5">Deadline: {new Date(openRace.fp1Deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
                   </div>
-                  <span className="text-[#e10600] text-sm font-medium shrink-0 ml-4">Make pick →</span>
+                  <span className="text-[#e10600] text-sm font-medium shrink-0 ml-4">
+                    {pickForOpenRace ? 'Change →' : 'Make pick →'}
+                  </span>
                 </Link>
               )}
               <Leaderboard entries={league.leaderboard} currentUserId={session?.user?.id ?? ''} />

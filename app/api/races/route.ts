@@ -22,19 +22,15 @@ export async function GET(request: Request) {
 
   const racesWithStatus = races.map((race) => {
     const fp1 = new Date(race.fp1Deadline)
-    const raceTime = new Date(race.raceDatetime)
     const hasResults = race.results.length > 0
-    const daysUntilFP1 = (fp1.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
 
-    let status: 'upcoming' | 'picking_open' | 'locked' | 'results_in'
+    let status: 'picking_open' | 'locked' | 'results_in'
     if (hasResults) {
       status = 'results_in'
     } else if (fp1 <= now) {
       status = 'locked'
-    } else if (daysUntilFP1 <= 7) {
-      status = 'picking_open'
     } else {
-      status = 'upcoming'
+      status = 'picking_open'
     }
 
     return {
