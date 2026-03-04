@@ -58,18 +58,41 @@ export async function calculateScoresForRace(raceId: string): Promise<number> {
   // Fetch all picks for this race across all leagues
   const picks = await prisma.pick.findMany({
     where: { raceId },
-    include: { league: { include: { members: true } } },
+    include: { league: { include: { members: true } }, seat: true },
   })
 
-  // Build a map of seatId -> points from race results
+  // Build a map of seatId -> RaceResult from race results
   const results = await prisma.raceResult.findMany({ where: { raceId } })
   const pointsBySeatId = new Map(results.map((r) => [r.seatId, r.points]))
+  const resultBySeatId = new Map(results.map((r) => [r.seatId, r]))
 
   let count = 0
 
   // Score each pick
   for (const pick of picks) {
-    const pointsEarned = pointsBySeatId.get(pick.seatId) ?? 0
+    let pointsEarned = pointsBySeatId.get(pick.seatId) ?? 0
+
+    // Apply chip effects
+    if (pick.chip === 'DOUBLE_POINTS') {
+      pointsEarned *= 2
+    } else if (pick.chip === 'SAFETY_NET') {
+      const result = resultBySeatId.get(pick.seatId)
+      // DNF = position is null
+      if (result && result.position === null) {
+        // Find teammate: same team, same season, different driver
+        const teammate = await prisma.seat.findFirst({
+          where: {
+            seasonYear: pick.seat.seasonYear,
+            teamName: pick.seat.teamName,
+            NOT: { id: pick.seatId },
+          },
+        })
+        if (teammate) {
+          pointsEarned = pointsBySeatId.get(teammate.id) ?? 0
+        }
+      }
+    }
+
     await prisma.playerScore.upsert({
       where: { pickId: pick.id },
       update: { pointsEarned },

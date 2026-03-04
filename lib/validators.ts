@@ -27,6 +27,7 @@ export const CreateLeagueSchema = z.object({
     .max(50, 'League name must be 50 characters or less')
     .transform((s) => s.trim()),
   seasonYear: z.number().int().min(2024).max(2100),
+  chipsEnabled: z.boolean().optional(),
 })
 
 export const JoinLeagueSchema = z.object({
@@ -40,6 +41,7 @@ export const UpdateLeagueSchema = z.object({
     .max(50)
     .transform((s) => s.trim())
     .optional(),
+  chipsEnabled: z.boolean().optional(),
 })
 
 export const UpdateMemberSchema = z.object({
@@ -49,6 +51,7 @@ export const UpdateMemberSchema = z.object({
 export const SubmitPickSchema = z.object({
   raceId: z.string().cuid(),
   seatId: z.string().cuid(),
+  chip: z.enum(['DOUBLE_POINTS', 'SAFETY_NET']).nullable().optional(),
 })
 
 export const IngestResultsSchema = z.object({

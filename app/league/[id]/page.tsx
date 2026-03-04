@@ -17,6 +17,7 @@ interface LeagueData {
   seasonYear: number
   status: 'ACTIVE' | 'ARCHIVED'
   inviteCode: string
+  chipsEnabled: boolean
   currentUserRole: 'ADMIN' | 'MEMBER'
   leaderboard: LeaderboardEntry[]
 }
@@ -31,7 +32,7 @@ interface RaceItem {
   status: 'picking_open' | 'locked' | 'results_in'
 }
 
-interface PickItem { raceId: string; driverCode: string; driverName: string }
+interface PickItem { raceId: string; driverCode: string; driverName: string; chip?: 'DOUBLE_POINTS' | 'SAFETY_NET' | null }
 
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>()
@@ -60,10 +61,11 @@ export default function LeaguePage() {
 
       setLeague(leagueData)
       setRaces(racesData)
-      setUserPicks(picksData.map((p: { raceId: string; seat?: { driverCode: string; driverName: string } }) => ({
+      setUserPicks(picksData.map((p: { raceId: string; chip?: 'DOUBLE_POINTS' | 'SAFETY_NET' | null; seat?: { driverCode: string; driverName: string } }) => ({
         raceId: p.raceId,
         driverCode: p.seat?.driverCode ?? '',
         driverName: p.seat?.driverName ?? '',
+        chip: p.chip ?? null,
       })))
       setLoading(false)
     }
@@ -179,7 +181,7 @@ export default function LeaguePage() {
                   <div>
                     <p className="text-white text-sm font-medium">
                       {pickForOpenRace
-                        ? `${openRace.name} — ${pickForOpenRace.driverName}`
+                        ? <>{openRace.name} — {pickForOpenRace.driverName}{pickForOpenRace.chip && <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-[#e10600]/20 text-[#e10600]">{pickForOpenRace.chip === 'DOUBLE_POINTS' ? '2x' : 'SN'}</span>}</>
                         : `You haven\u0027t picked for ${openRace.name}`}
                     </p>
                     <p className="text-gray-400 text-xs mt-0.5">Deadline: {new Date(openRace.fp1Deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
@@ -210,6 +212,7 @@ export default function LeaguePage() {
             members={members}
             races={races}
             currentUserId={session?.user?.id ?? ''}
+            chipsEnabled={league.chipsEnabled}
             onLeagueRenamed={(name) => setLeague({ ...league, name })}
             onMemberRemoved={(userId) =>
               setLeague({
@@ -218,6 +221,7 @@ export default function LeaguePage() {
               })
             }
             onRoleUpdated={() => {/* roles are in leaderboard; re-fetch if needed */}}
+            onChipsToggled={(chipsEnabled) => setLeague({ ...league, chipsEnabled })}
           />
         )}
       </div>

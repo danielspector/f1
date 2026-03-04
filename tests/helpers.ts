@@ -152,7 +152,7 @@ export function makeRaceResult(
     id: overrides.id ?? nextId(),
     raceId: overrides.raceId ?? nextId(),
     seatId: overrides.seatId ?? nextId(),
-    position: overrides.position ?? 1,
+    position: 'position' in overrides ? overrides.position! : 1,
     points: overrides.points ?? 25,
   }
 }

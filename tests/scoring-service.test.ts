@@ -156,6 +156,8 @@ describe('calculateScoresForRace', () => {
 
     const pick = {
       ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat1' }),
+      chip: null,
+      seat: makeSeat({ id: 'seat1', seasonYear: 2026 }),
       league: { id: 'league1', members: [makeMember({ userId: 'user1', leagueId: 'league1' })] },
     }
 
@@ -190,6 +192,8 @@ describe('calculateScoresForRace', () => {
         raceId,
         seatId: 'seat_none',
       }),
+      chip: null,
+      seat: makeSeat({ id: 'seat_none', seasonYear: 2026 }),
       league: { id: 'league1', members: [makeMember({ userId: 'user1' })] },
     }
 
@@ -226,6 +230,175 @@ describe('calculateScoresForRace', () => {
     expect(db.playerScore.upsert).not.toHaveBeenCalled()
   })
 
+  // Chip: DOUBLE_POINTS doubles the score
+  it('doubles points when DOUBLE_POINTS chip is active', async () => {
+    const raceId = 'race1'
+    const race = makeRace({ id: raceId })
+    db.race.findUnique.mockResolvedValue(race)
+
+    const seat = makeSeat({ id: 'seat1', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat1' }),
+      chip: 'DOUBLE_POINTS',
+      seat,
+      league: { id: 'league1', members: [makeMember({ userId: 'user1', leagueId: 'league1' })] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat1', position: 1, points: 25 }),
+    ])
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([
+      makeMember({ userId: 'user1', leagueId: 'league1' }),
+    ])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(50) // 25 * 2
+  })
+
+  // Chip: DOUBLE_POINTS with 0 points stays 0
+  it('doubles 0 points to 0 with DOUBLE_POINTS chip', async () => {
+    const raceId = 'race1'
+    db.race.findUnique.mockResolvedValue(makeRace({ id: raceId }))
+
+    const seat = makeSeat({ id: 'seat1', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat1' }),
+      chip: 'DOUBLE_POINTS',
+      seat,
+      league: { id: 'league1', members: [] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat1', position: null, points: 0 }),
+    ])
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(0)
+  })
+
+  // Chip: SAFETY_NET — driver DNF, receives teammate's points
+  it('uses teammate points when SAFETY_NET chip is active and driver DNFs', async () => {
+    const raceId = 'race1'
+    db.race.findUnique.mockResolvedValue(makeRace({ id: raceId }))
+
+    const pickedSeat = makeSeat({ id: 'seat_nor', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+    const teammateSeat = makeSeat({ id: 'seat_pia', seasonYear: 2026, teamName: 'McLaren', driverCode: 'PIA' })
+
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat_nor' }),
+      chip: 'SAFETY_NET',
+      seat: pickedSeat,
+      league: { id: 'league1', members: [] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: null, points: 0 }), // DNF
+      makeRaceResult({ raceId, seatId: 'seat_pia', position: 3, points: 15 }),   // Teammate P3
+    ])
+    db.seat.findFirst.mockResolvedValue(teammateSeat as any) // teammate lookup
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(15) // teammate's points
+  })
+
+  // Chip: SAFETY_NET — driver finishes, no effect
+  it('has no effect when SAFETY_NET chip is active but driver finishes normally', async () => {
+    const raceId = 'race1'
+    db.race.findUnique.mockResolvedValue(makeRace({ id: raceId }))
+
+    const pickedSeat = makeSeat({ id: 'seat_nor', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat_nor' }),
+      chip: 'SAFETY_NET',
+      seat: pickedSeat,
+      league: { id: 'league1', members: [] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: 5, points: 10 }), // finished P5
+    ])
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(10) // normal points, no safety net effect
+    expect(db.seat.findFirst).not.toHaveBeenCalled() // teammate lookup not needed
+  })
+
+  // Chip: SAFETY_NET — both driver and teammate DNF
+  it('gives 0 points when SAFETY_NET is active and both driver and teammate DNF', async () => {
+    const raceId = 'race1'
+    db.race.findUnique.mockResolvedValue(makeRace({ id: raceId }))
+
+    const pickedSeat = makeSeat({ id: 'seat_nor', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+    const teammateSeat = makeSeat({ id: 'seat_pia', seasonYear: 2026, teamName: 'McLaren', driverCode: 'PIA' })
+
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat_nor' }),
+      chip: 'SAFETY_NET',
+      seat: pickedSeat,
+      league: { id: 'league1', members: [] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: null, points: 0 }), // DNF
+      makeRaceResult({ raceId, seatId: 'seat_pia', position: null, points: 0 }), // teammate also DNF
+    ])
+    db.seat.findFirst.mockResolvedValue(teammateSeat as any)
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(0) // teammate also DNF'd, 0 points
+  })
+
+  // No chip — normal scoring unaffected
+  it('scores normally when no chip is active', async () => {
+    const raceId = 'race1'
+    db.race.findUnique.mockResolvedValue(makeRace({ id: raceId }))
+
+    const seat = makeSeat({ id: 'seat1', seasonYear: 2026, teamName: 'McLaren', driverCode: 'NOR' })
+    const pick = {
+      ...makePick({ id: 'pick1', leagueId: 'league1', userId: 'user1', raceId, seatId: 'seat1' }),
+      chip: null,
+      seat,
+      league: { id: 'league1', members: [] },
+    }
+
+    db.pick.findMany.mockResolvedValue([pick] as any)
+    db.raceResult.findMany.mockResolvedValue([
+      makeRaceResult({ raceId, seatId: 'seat1', position: 1, points: 25 }),
+    ])
+    db.playerScore.upsert.mockResolvedValue({} as any)
+    db.leagueMember.findMany.mockResolvedValue([])
+
+    await calculateScoresForRace(raceId)
+
+    const upsertCall = db.playerScore.upsert.mock.calls[0][0] as any
+    expect(upsertCall.create.pointsEarned).toBe(25) // normal, not doubled
+  })
+
   // FR-10: Verify the complete F1 points mapping
   it('uses correct F1 points mapping: 25-18-15-12-10-8-6-4-2-1', async () => {
     const expectedPoints: Record<number, number> = {
@@ -245,7 +418,7 @@ describe('calculateScoresForRace', () => {
     const race = makeRace({ id: raceId })
     db.race.findUnique.mockResolvedValue(race)
 
-    const picks = Object.keys(expectedPoints).map((pos, i) => ({
+    const picks = Object.keys(expectedPoints).map((pos) => ({
       ...makePick({
         id: `pick_${pos}`,
         leagueId: 'league1',
@@ -253,6 +426,8 @@ describe('calculateScoresForRace', () => {
         raceId,
         seatId: `seat_${pos}`,
       }),
+      chip: null,
+      seat: makeSeat({ id: `seat_${pos}`, seasonYear: 2026 }),
       league: { id: 'league1', members: [] },
     }))
 

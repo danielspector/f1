@@ -23,6 +23,10 @@ export async function GET(request: Request, { params }: Params) {
   })
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  // Fetch league for chipsEnabled
+  const league = await prisma.league.findUnique({ where: { id: leagueId } })
+  if (!league) return NextResponse.json({ error: 'League not found' }, { status: 404 })
+
   if (raceId) {
     const race = await prisma.race.findUnique({ where: { id: raceId } })
     if (!race) return NextResponse.json({ error: 'Race not found' }, { status: 404 })
@@ -56,6 +60,7 @@ export async function GET(request: Request, { params }: Params) {
       return NextResponse.json({
         race,
         deadlinePassed: false,
+        chipsEnabled: league.chipsEnabled,
         seats: allSeats.map((s) => ({
           ...s,
           available: availableSeatIds.has(s.id),
@@ -79,6 +84,7 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({
       race,
       deadlinePassed: true,
+      chipsEnabled: league.chipsEnabled,
       seats: allSeats.map((s) => ({
         ...s,
         available: availableSeatIds.has(s.id),
@@ -119,11 +125,36 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const { raceId, seatId } = parsed.data
+  const { raceId, seatId, chip } = parsed.data
 
   // 1. Verify race exists
   const race = await prisma.race.findUnique({ where: { id: raceId } })
   if (!race) return NextResponse.json({ error: 'Race not found' }, { status: 404 })
+
+  // 1a. Chip validation
+  if (chip) {
+    const league = await prisma.league.findUnique({ where: { id: leagueId } })
+    if (!league?.chipsEnabled) {
+      return NextResponse.json({ error: 'Chips are not enabled for this league' }, { status: 400 })
+    }
+
+    // Check if this chip was already used in another race this season
+    const existingChipUse = await prisma.pick.findFirst({
+      where: {
+        leagueId,
+        userId,
+        chip,
+        race: { seasonYear: race.seasonYear },
+        NOT: { raceId },
+      },
+    })
+    if (existingChipUse) {
+      return NextResponse.json(
+        { error: `You have already used the ${chip === 'DOUBLE_POINTS' ? 'Double Points' : 'Safety Net'} chip this season` },
+        { status: 400 },
+      )
+    }
+  }
 
   // 2. Enforce FP1 deadline — server-side check
   if (isFP1Passed(race)) {
@@ -143,10 +174,11 @@ export async function POST(request: Request, { params }: Params) {
     )
   }
 
+  const chipValue = chip ?? null
   const pick = await prisma.pick.upsert({
     where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
-    update: { seatId },
-    create: { leagueId, userId, raceId, seatId },
+    update: { seatId, chip: chipValue },
+    create: { leagueId, userId, raceId, seatId, chip: chipValue },
     include: { seat: true, race: true },
   })
 

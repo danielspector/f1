@@ -263,6 +263,100 @@ describe('SubmitPickSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('accepts valid chip value DOUBLE_POINTS', () => {
+    const result = SubmitPickSchema.safeParse({
+      raceId: 'cm5abc123def456ghi789',
+      seatId: 'cm5xyz789abc123def456',
+      chip: 'DOUBLE_POINTS',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chip).toBe('DOUBLE_POINTS')
+  })
+
+  it('accepts valid chip value SAFETY_NET', () => {
+    const result = SubmitPickSchema.safeParse({
+      raceId: 'cm5abc123def456ghi789',
+      seatId: 'cm5xyz789abc123def456',
+      chip: 'SAFETY_NET',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chip).toBe('SAFETY_NET')
+  })
+
+  it('accepts null chip (no chip used)', () => {
+    const result = SubmitPickSchema.safeParse({
+      raceId: 'cm5abc123def456ghi789',
+      seatId: 'cm5xyz789abc123def456',
+      chip: null,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chip).toBeNull()
+  })
+
+  it('accepts omitted chip field', () => {
+    const result = SubmitPickSchema.safeParse({
+      raceId: 'cm5abc123def456ghi789',
+      seatId: 'cm5xyz789abc123def456',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chip).toBeUndefined()
+  })
+
+  it('rejects invalid chip value', () => {
+    const result = SubmitPickSchema.safeParse({
+      raceId: 'cm5abc123def456ghi789',
+      seatId: 'cm5xyz789abc123def456',
+      chip: 'TRIPLE_POINTS',
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('UpdateLeagueSchema — chipsEnabled', () => {
+  it('accepts chipsEnabled: true', () => {
+    const result = UpdateLeagueSchema.safeParse({ chipsEnabled: true })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chipsEnabled).toBe(true)
+  })
+
+  it('accepts chipsEnabled: false', () => {
+    const result = UpdateLeagueSchema.safeParse({ chipsEnabled: false })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chipsEnabled).toBe(false)
+  })
+
+  it('accepts omitted chipsEnabled', () => {
+    const result = UpdateLeagueSchema.safeParse({ name: 'Foo' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chipsEnabled).toBeUndefined()
+  })
+
+  it('rejects non-boolean chipsEnabled', () => {
+    const result = UpdateLeagueSchema.safeParse({ chipsEnabled: 'yes' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('CreateLeagueSchema — chipsEnabled', () => {
+  it('accepts chipsEnabled: true on league creation', () => {
+    const result = CreateLeagueSchema.safeParse({
+      name: 'My League',
+      seasonYear: 2026,
+      chipsEnabled: true,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chipsEnabled).toBe(true)
+  })
+
+  it('accepts omitted chipsEnabled on league creation', () => {
+    const result = CreateLeagueSchema.safeParse({
+      name: 'My League',
+      seasonYear: 2026,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.chipsEnabled).toBeUndefined()
+  })
 })
 
 describe('IngestResultsSchema', () => {

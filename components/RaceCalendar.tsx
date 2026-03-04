@@ -16,6 +16,7 @@ interface RaceWithStatus {
 interface UserPick {
   raceId: string
   driverCode: string
+  chip?: 'DOUBLE_POINTS' | 'SAFETY_NET' | null
 }
 
 interface Props {
@@ -121,6 +122,11 @@ export default function RaceCalendar({ races, userPicks, leagueId }: Props) {
                 {canPick && hasPick ? (
                   <span className="text-xs px-2 py-0.5 rounded-full text-green-300 bg-green-900/20">
                     ✓ {pick.driverCode}
+                    {pick.chip && (
+                      <span className="ml-1 text-[10px] px-1 rounded bg-[#e10600]/20 text-[#e10600]">
+                        {pick.chip === 'DOUBLE_POINTS' ? '2x' : 'SN'}
+                      </span>
+                    )}
                   </span>
                 ) : (
                   <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[race.status]}`}>

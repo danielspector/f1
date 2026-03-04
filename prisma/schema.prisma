@@ -38,6 +38,13 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ─── Chips ──────────────────────────────────────────────────────────────────
+
+enum Chip {
+  DOUBLE_POINTS
+  SAFETY_NET
+}
+
 // ─── Leagues ─────────────────────────────────────────────────────────────────
 
 enum LeagueStatus {
@@ -57,8 +64,9 @@ model League {
   seasonYear  Int
   status      LeagueStatus @default(ACTIVE)
   createdById String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  chipsEnabled Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   members LeagueMember[]
   picks   Pick[]
@@ -118,6 +126,7 @@ model Pick {
   userId      String
   raceId      String
   seatId      String
+  chip        Chip?
   submittedAt DateTime @default(now())
 
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)

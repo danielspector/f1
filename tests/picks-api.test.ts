@@ -167,7 +167,7 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
     expect(db.pick.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { leagueId_userId_raceId: { leagueId: 'l1', userId: 'user1', raceId: RACE_ID } },
-        update: { seatId: NEW_SEAT_ID },
+        update: { seatId: NEW_SEAT_ID, chip: null },
       }),
     )
   })
@@ -259,6 +259,131 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
     const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
     expect(response.status).toBe(404)
   })
+
+  // Chip validation tests
+  it('rejects chip when league has chips disabled', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z') }),
+    )
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: false } as any)
+
+    const request = new Request('http://localhost/api/leagues/l1/picks', {
+      method: 'POST',
+      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID, chip: 'DOUBLE_POINTS' }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
+    expect(response.status).toBe(400)
+
+    const body = await response.json()
+    expect(body.error).toContain('not enabled')
+  })
+
+  it('rejects chip already used in another race this season', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z'), seasonYear: 2026 }),
+    )
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: true } as any)
+    // Chip was already used on a different race
+    db.pick.findFirst.mockResolvedValue({ id: 'old-pick', chip: 'DOUBLE_POINTS' } as any)
+
+    const request = new Request('http://localhost/api/leagues/l1/picks', {
+      method: 'POST',
+      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID, chip: 'DOUBLE_POINTS' }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
+    expect(response.status).toBe(400)
+
+    const body = await response.json()
+    expect(body.error).toContain('already used')
+  })
+
+  it('allows chip submission when league has chips enabled and chip not yet used', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    const seatWithValidId = makeSeat({ id: SEAT_ID, driverName: 'Norris', driverCode: 'NOR', teamName: 'McLaren' })
+    const fullGrid = [seatWithValidId, ...makeFullGrid().slice(1)]
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z'), seasonYear: 2026 }),
+    )
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: true } as any)
+    db.pick.findFirst.mockResolvedValue(null) // chip not yet used
+
+    mockGetAvailableSeats.mockResolvedValue({
+      availableSeats: fullGrid,
+      currentPickSeatId: null,
+    })
+
+    db.pick.upsert.mockResolvedValue({
+      id: 'pick1', seatId: SEAT_ID, raceId: RACE_ID, chip: 'DOUBLE_POINTS',
+      seat: seatWithValidId, race: makeRace({ id: RACE_ID }),
+    } as any)
+
+    const request = new Request('http://localhost/api/leagues/l1/picks', {
+      method: 'POST',
+      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID, chip: 'DOUBLE_POINTS' }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
+    expect(response.status).toBe(201)
+
+    expect(db.pick.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ chip: 'DOUBLE_POINTS' }),
+        update: expect.objectContaining({ chip: 'DOUBLE_POINTS' }),
+      }),
+    )
+  })
+
+  it('allows pick with null chip (clears chip)', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    const seatWithValidId = makeSeat({ id: SEAT_ID })
+    const fullGrid = [seatWithValidId, ...makeFullGrid().slice(1)]
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z') }),
+    )
+
+    mockGetAvailableSeats.mockResolvedValue({
+      availableSeats: fullGrid,
+      currentPickSeatId: null,
+    })
+
+    db.pick.upsert.mockResolvedValue({
+      id: 'pick1', seatId: SEAT_ID, raceId: RACE_ID, chip: null,
+      seat: seatWithValidId, race: makeRace({ id: RACE_ID }),
+    } as any)
+
+    const request = new Request('http://localhost/api/leagues/l1/picks', {
+      method: 'POST',
+      body: JSON.stringify({ raceId: RACE_ID, seatId: SEAT_ID, chip: null }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({ id: 'l1' }) })
+    expect(response.status).toBe(201)
+
+    expect(db.pick.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ chip: null }),
+        update: expect.objectContaining({ chip: null }),
+      }),
+    )
+  })
 })
 
 describe('GET /api/leagues/[id]/picks (Retrieve Picks)', () => {
@@ -281,6 +406,7 @@ describe('GET /api/leagues/[id]/picks (Retrieve Picks)', () => {
     mockAuthenticatedUser('user1')
 
     db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: false } as any)
     db.race.findUnique.mockResolvedValue(
       makeRace({ id: 'race1', fp1Deadline: new Date('2026-03-14T11:30:00Z'), seasonYear: 2026 }),
     )
@@ -311,6 +437,7 @@ describe('GET /api/leagues/[id]/picks (Retrieve Picks)', () => {
     mockAuthenticatedUser('user1')
 
     db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: false } as any)
     db.race.findUnique.mockResolvedValue(
       makeRace({ id: 'race1', fp1Deadline: new Date('2026-03-14T11:30:00Z'), seasonYear: 2026 }),
     )
@@ -350,6 +477,30 @@ describe('GET /api/leagues/[id]/picks (Retrieve Picks)', () => {
     expect(body.deadlinePassed).toBe(true)
     expect(body.allPicks).toBeDefined()
     expect(body.allPicks).toHaveLength(2) // all picks revealed
+  })
+
+  it('returns chipsEnabled in response', async () => {
+    vi.setSystemTime(new Date('2026-03-14T10:00:00Z'))
+    mockAuthenticatedUser('user1')
+
+    db.leagueMember.findUnique.mockResolvedValue({ role: 'MEMBER' } as any)
+    db.league.findUnique.mockResolvedValue({ id: 'l1', chipsEnabled: true } as any)
+    db.race.findUnique.mockResolvedValue(
+      makeRace({ id: 'race1', fp1Deadline: new Date('2026-03-14T11:30:00Z'), seasonYear: 2026 }),
+    )
+
+    mockGetAvailableSeats.mockResolvedValue({
+      availableSeats: makeFullGrid(),
+      currentPickSeatId: null,
+    })
+
+    db.seat.findMany.mockResolvedValue(makeFullGrid())
+
+    const request = new Request('http://localhost/api/leagues/l1/picks?raceId=race1')
+
+    const response = await GET(request, { params: Promise.resolve({ id: 'l1' }) })
+    const body = await response.json()
+    expect(body.chipsEnabled).toBe(true)
   })
 
   it('returns 403 for non-members', async () => {

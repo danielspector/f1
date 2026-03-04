@@ -7,6 +7,8 @@ interface SeatWithAvailability extends Seat {
   available: boolean
 }
 
+type ChipType = 'DOUBLE_POINTS' | 'SAFETY_NET'
+
 interface Props {
   seats: SeatWithAvailability[]
   currentPickSeatId?: string | null
@@ -14,7 +16,10 @@ interface Props {
   raceName: string
   leagueId: string
   raceId: string
-  onPickSubmitted: (seatId: string) => void
+  chipsEnabled?: boolean
+  usedChips?: ChipType[]
+  currentChip?: ChipType | null
+  onPickSubmitted: (seatId: string, chip?: ChipType | null) => void
 }
 
 // Team color accents
@@ -45,12 +50,16 @@ export default function DriverSelector({
   raceName,
   leagueId,
   raceId,
+  chipsEnabled = false,
+  usedChips = [],
+  currentChip = null,
   onPickSubmitted,
 }: Props) {
   const [confirming, setConfirming] = useState<Seat | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
+  const [selectedChip, setSelectedChip] = useState<ChipType | null>(currentChip)
 
   // Group by team
   const byTeam = seats.reduce<Record<string, SeatWithAvailability[]>>((acc, seat) => {
@@ -73,7 +82,7 @@ export default function DriverSelector({
       const res = await fetch(`/api/leagues/${leagueId}/picks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raceId, seatId: confirming.id }),
+        body: JSON.stringify({ raceId, seatId: confirming.id, chip: selectedChip }),
       })
 
       const data = await res.json()
@@ -85,7 +94,7 @@ export default function DriverSelector({
 
       setToast(`✓ ${confirming.driverName} confirmed for ${raceName}!`)
       setTimeout(() => setToast(''), 4000)
-      onPickSubmitted(confirming.id)
+      onPickSubmitted(confirming.id, selectedChip)
       setConfirming(null)
     } catch {
       setError('Something went wrong')
@@ -111,6 +120,39 @@ export default function DriverSelector({
       {isLocked && (
         <div className="bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg px-4 py-3 mb-4 text-sm text-gray-400 text-center">
           Picks are locked — FP1 has started.
+        </div>
+      )}
+
+      {/* Chip selector */}
+      {chipsEnabled && !isLocked && (
+        <div className="mb-4">
+          <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Activate a chip</p>
+          <div className="flex gap-2">
+            {([
+              { key: 'DOUBLE_POINTS' as ChipType, label: 'Double Points (2x)', shortLabel: '2x' },
+              { key: 'SAFETY_NET' as ChipType, label: 'Safety Net', shortLabel: 'SN' },
+            ]).map(({ key, label }) => {
+              const isUsed = usedChips.includes(key)
+              const isActive = selectedChip === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedChip(isActive ? null : key)}
+                  disabled={isUsed}
+                  className={[
+                    'text-sm px-3 py-2 rounded-lg border transition-colors',
+                    isActive
+                      ? 'border-[#e10600] bg-[#e10600]/20 text-white'
+                      : isUsed
+                        ? 'border-[#2a2a2a] bg-[#1a1a1a] text-gray-600 cursor-not-allowed opacity-40'
+                        : 'border-[#2a2a2a] bg-[#1a1a1a] text-gray-300 hover:border-gray-400 cursor-pointer',
+                  ].join(' ')}
+                >
+                  {label}{isUsed ? ' (used)' : ''}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -173,7 +215,10 @@ export default function DriverSelector({
             <p className="text-gray-400 text-sm mb-4">
               {currentPickSeatId ? 'Change your pick to ' : 'Pick '}
               <span className="text-white font-medium">{confirming.driverName}</span> for{' '}
-              <span className="text-white font-medium">{raceName}</span>?
+              <span className="text-white font-medium">{raceName}</span>
+              {selectedChip && (
+                <> with <span className="text-[#e10600] font-medium">{selectedChip === 'DOUBLE_POINTS' ? 'Double Points (2x)' : 'Safety Net'}</span></>
+              )}?
               <br />
               <span className="text-gray-500 text-xs mt-1 block">You can change your pick any time before the deadline.</span>
             </p>

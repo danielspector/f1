@@ -10,14 +10,18 @@ interface SeatWithAvailability extends Seat {
   available: boolean
 }
 
+type ChipType = 'DOUBLE_POINTS' | 'SAFETY_NET'
+
 interface PickData {
   race: { id: string; name: string; round: number; fp1Deadline: string; raceDatetime: string }
   deadlinePassed: boolean
+  chipsEnabled?: boolean
   seats: SeatWithAvailability[]
   currentPickSeatId: string | null
   myPick: {
     id: string
     seat: Seat
+    chip?: ChipType | null
     score?: { pointsEarned: number } | null
   } | null
   allPicks: Array<{
@@ -25,8 +29,14 @@ interface PickData {
     userId: string
     user: { id: string; name: string | null; email: string }
     seat: Seat
+    chip?: ChipType | null
     score?: { pointsEarned: number } | null
   }> | null
+}
+
+interface UserPickWithChip {
+  raceId: string
+  chip?: ChipType | null
 }
 
 export default function PickPage() {
@@ -35,16 +45,36 @@ export default function PickPage() {
   const [data, setData] = useState<PickData | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentPickSeatId, setCurrentPickSeatId] = useState<string | null>(null)
+  const [currentChip, setCurrentChip] = useState<ChipType | null>(null)
+  const [usedChips, setUsedChips] = useState<ChipType[]>([])
 
   useEffect(() => {
-    fetch(`/api/leagues/${leagueId}/picks?raceId=${raceId}`)
-      .then((r) => r.json())
-      .then((d) => {
+    async function load() {
+      try {
+        const [pickRes, allPicksRes] = await Promise.all([
+          fetch(`/api/leagues/${leagueId}/picks?raceId=${raceId}`),
+          fetch(`/api/leagues/${leagueId}/picks`),
+        ])
+        const d = await pickRes.json()
         setData(d)
         setCurrentPickSeatId(d.currentPickSeatId)
+        setCurrentChip(d.myPick?.chip ?? null)
+
+        // Determine which chips have been used this season (on other races)
+        if (allPicksRes.ok) {
+          const allPicks: UserPickWithChip[] = await allPicksRes.json()
+          const used = allPicks
+            .filter((p) => p.chip && p.raceId !== raceId)
+            .map((p) => p.chip!)
+          setUsedChips(used)
+        }
+      } catch {
+        // ignore
+      } finally {
         setLoading(false)
-      })
-      .catch(() => setLoading(false))
+      }
+    }
+    load()
   }, [leagueId, raceId])
 
   if (loading) {
@@ -99,7 +129,14 @@ export default function PickPage() {
           <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Your pick</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-semibold">{myPick.seat.driverName}</p>
+              <p className="text-white font-semibold">
+                {myPick.seat.driverName}
+                {myPick.chip && (
+                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-[#e10600]/20 text-[#e10600]">
+                    {myPick.chip === 'DOUBLE_POINTS' ? '2x' : 'SN'}
+                  </span>
+                )}
+              </p>
               <p className="text-gray-400 text-sm">{myPick.seat.teamName}</p>
             </div>
             <div className="text-right">
@@ -130,7 +167,13 @@ export default function PickPage() {
                     {pick.user.name || pick.user.email}
                   </p>
                   <p className="text-gray-400 text-xs">
-                    {pick.seat.driverName} · {pick.seat.teamName}
+                    {pick.seat.driverName}
+                    {pick.chip && (
+                      <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#e10600]/20 text-[#e10600]">
+                        {pick.chip === 'DOUBLE_POINTS' ? '2x' : 'SN'}
+                      </span>
+                    )}
+                    {' '}· {pick.seat.teamName}
                   </p>
                 </div>
                 <div className="text-right">
@@ -151,7 +194,13 @@ export default function PickPage() {
         <div>
           {currentPickSeatId && (
             <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 mb-4 text-sm text-green-300">
-              ✓ Pick submitted — you can change it any time before the deadline.
+              ✓ Pick submitted
+              {currentChip && (
+                <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-[#e10600]/20 text-[#e10600]">
+                  {currentChip === 'DOUBLE_POINTS' ? '2x' : 'SN'}
+                </span>
+              )}
+              {' '}— you can change it any time before the deadline.
             </div>
           )}
           <DriverSelector
@@ -161,8 +210,12 @@ export default function PickPage() {
             raceName={race.name}
             leagueId={leagueId}
             raceId={raceId}
-            onPickSubmitted={(seatId) => {
+            chipsEnabled={data.chipsEnabled}
+            usedChips={usedChips}
+            currentChip={currentChip}
+            onPickSubmitted={(seatId, chip) => {
               setCurrentPickSeatId(seatId)
+              setCurrentChip(chip ?? null)
               // Refresh data to reflect new pick
               setTimeout(() => router.refresh(), 500)
             }}

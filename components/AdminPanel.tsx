@@ -29,9 +29,11 @@ interface Props {
   members: Member[]
   races: Race[]
   currentUserId: string
+  chipsEnabled: boolean
   onLeagueRenamed: (name: string) => void
   onMemberRemoved: (userId: string) => void
   onRoleUpdated: (userId: string, role: 'ADMIN' | 'MEMBER') => void
+  onChipsToggled: (enabled: boolean) => void
 }
 
 export default function AdminPanel({
@@ -41,9 +43,11 @@ export default function AdminPanel({
   members,
   races,
   currentUserId,
+  chipsEnabled,
   onLeagueRenamed,
   onMemberRemoved,
   onRoleUpdated,
+  onChipsToggled,
 }: Props) {
   const [nameInput, setNameInput] = useState(leagueName)
   const [renaming, setRenaming] = useState(false)
@@ -160,6 +164,42 @@ export default function AdminPanel({
       <div>
         <h3 className="text-sm font-medium text-gray-300 mb-3">Invite link</h3>
         <InviteLink inviteCode={inviteCode} />
+      </div>
+
+      {/* Chips toggle */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-300 mb-3">Chips (points boosts)</h3>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={chipsEnabled}
+            onClick={async () => {
+              const next = !chipsEnabled
+              const res = await fetch(`/api/leagues/${leagueId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chipsEnabled: next }),
+              })
+              if (res.ok) onChipsToggled(next)
+            }}
+            className={[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              chipsEnabled ? 'bg-[#e10600]' : 'bg-[#2a2a2a]',
+            ].join(' ')}
+          >
+            <span
+              className={[
+                'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                chipsEnabled ? 'translate-x-6' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </button>
+          <span className="text-sm text-gray-300">
+            {chipsEnabled ? 'Chips enabled' : 'Chips disabled'}
+          </span>
+        </label>
+        <p className="text-xs text-gray-500 mt-1">Double Points and Safety Net — one of each per season, one per race week.</p>
       </div>
 
       {/* Enter pick for member */}

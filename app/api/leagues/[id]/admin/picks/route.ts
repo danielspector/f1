@@ -8,6 +8,7 @@ const AdminPickSchema = z.object({
   userId: z.string().cuid(),
   raceId: z.string().cuid(),
   seatId: z.string().cuid(),
+  chip: z.enum(['DOUBLE_POINTS', 'SAFETY_NET']).nullable().optional(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -34,7 +35,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const { userId, raceId, seatId } = parsed.data
+  const { userId, raceId, seatId, chip } = parsed.data
 
   // Verify target user is a league member
   const targetMembership = await prisma.leagueMember.findUnique({
@@ -55,10 +56,11 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // Upsert — no deadline or seat-availability check; admin can override
+  const chipValue = chip ?? null
   const pick = await prisma.pick.upsert({
     where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
-    update: { seatId },
-    create: { leagueId, userId, raceId, seatId },
+    update: { seatId, chip: chipValue },
+    create: { leagueId, userId, raceId, seatId, chip: chipValue },
     include: { seat: true, race: true },
   })
 

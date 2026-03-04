@@ -136,7 +136,7 @@ describe('POST /api/leagues/[id]/admin/picks', () => {
     expect(db.pick.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { leagueId_userId_raceId: { leagueId: LEAGUE_ID, userId: MEMBER_ID, raceId: RACE_ID } },
-        update: { seatId: NEW_SEAT_ID },
+        update: { seatId: NEW_SEAT_ID, chip: null },
       }),
     )
   })
