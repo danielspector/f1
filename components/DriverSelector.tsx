@@ -73,8 +73,7 @@ export default function DriverSelector({
     setConfirming(seat)
   }
 
-  async function handleConfirm() {
-    if (!confirming) return
+  async function submitPick(seatId: string, chip: ChipType | null) {
     setSubmitting(true)
     setError('')
 
@@ -82,24 +81,43 @@ export default function DriverSelector({
       const res = await fetch(`/api/leagues/${leagueId}/picks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raceId, seatId: confirming.id, chip: selectedChip }),
+        body: JSON.stringify({ raceId, seatId, chip }),
       })
 
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to submit pick')
-        setConfirming(null)
-        return
+        return false
       }
 
-      setToast(`✓ ${confirming.driverName} confirmed for ${raceName}!`)
-      setTimeout(() => setToast(''), 4000)
-      onPickSubmitted(confirming.id, selectedChip)
-      setConfirming(null)
+      onPickSubmitted(seatId, chip)
+      return true
     } catch {
       setError('Something went wrong')
+      return false
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleConfirm() {
+    if (!confirming) return
+
+    const success = await submitPick(confirming.id, selectedChip)
+    if (success) {
+      setToast(`✓ ${confirming.driverName} confirmed for ${raceName}!`)
+      setTimeout(() => setToast(''), 4000)
+    }
+    setConfirming(null)
+  }
+
+  async function handleChipToggle(key: ChipType) {
+    const newChip = selectedChip === key ? null : key
+    setSelectedChip(newChip)
+
+    // If a driver is already picked, save the chip change immediately
+    if (currentPickSeatId) {
+      await submitPick(currentPickSeatId, newChip)
     }
   }
 
@@ -137,8 +155,8 @@ export default function DriverSelector({
               return (
                 <button
                   key={key}
-                  onClick={() => setSelectedChip(isActive ? null : key)}
-                  disabled={isUsed}
+                  onClick={() => handleChipToggle(key)}
+                  disabled={isUsed || submitting}
                   className={[
                     'text-sm px-3 py-2 rounded-lg border transition-colors',
                     isActive
