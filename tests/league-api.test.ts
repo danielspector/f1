@@ -33,6 +33,7 @@ describe('POST /api/leagues (Create League)', () => {
   // FR-02: Any user can create a league and receive a shareable invite link
   it('creates a league with an invite code', async () => {
     mockAuthenticatedUser('user1')
+    db.user.findUnique.mockResolvedValue({ id: 'user1' } as any)
 
     db.league.create.mockResolvedValue({
       id: 'league1',
@@ -59,6 +60,7 @@ describe('POST /api/leagues (Create League)', () => {
 
   it('creates the league creator as ADMIN member', async () => {
     mockAuthenticatedUser('user1')
+    db.user.findUnique.mockResolvedValue({ id: 'user1' } as any)
     db.league.create.mockResolvedValue({ id: 'l1' } as any)
 
     const request = new Request('http://localhost/api/leagues', {
@@ -87,6 +89,23 @@ describe('POST /api/leagues (Create League)', () => {
 
     const response = await POST(request)
     expect(response.status).toBe(401)
+  })
+
+  it('returns 401 when session user no longer exists in the database', async () => {
+    mockAuthenticatedUser('deleted-user')
+    db.user.findUnique.mockResolvedValue(null) // user was deleted but JWT still valid
+
+    const request = new Request('http://localhost/api/leagues', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'My League', seasonYear: 2026 }),
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(401)
+
+    const body = await response.json()
+    expect(body.error).toContain('User not found')
+    expect(db.league.create).not.toHaveBeenCalled()
   })
 
   it('rejects invalid league data', async () => {

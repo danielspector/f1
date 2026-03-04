@@ -85,7 +85,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const { name, seasonYear } = parsed.data
+  const { name, seasonYear, chipsEnabled } = parsed.data
+
+  // Verify the user still exists in the database (JWT session may outlive the user row)
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 401 })
+  }
 
   const league = await prisma.league.create({
     data: {
@@ -93,6 +99,7 @@ export async function POST(request: Request) {
       seasonYear,
       inviteCode: crypto.randomUUID(),
       createdById: userId,
+      ...(chipsEnabled !== undefined && { chipsEnabled }),
       members: {
         create: { userId, role: 'ADMIN' },
       },
