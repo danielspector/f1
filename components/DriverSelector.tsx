@@ -31,7 +31,7 @@ const TEAM_COLORS: Record<string, string> = {
   'Aston Martin': '#229971',
   Alpine: '#FF87BC',
   Williams: '#64C4FF',
-  Audi: '#52E252',
+  Audi: '#FF4C3B',
   'Racing Bulls': '#6692FF',
   Haas: '#B6BABD',
   Cadillac: '#C0C0C0',
