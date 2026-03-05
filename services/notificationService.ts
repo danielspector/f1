@@ -6,7 +6,9 @@ import PickReminder from '@/emails/PickReminder'
 import RaceSummary from '@/emails/RaceSummary'
 import React from 'react'
 
-const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+const APP_URL = process.env.NEXTAUTH_URL
+  || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+  || 'http://localhost:3000'
 
 function unsubscribeUrl(token: string) {
   return `${APP_URL}/unsubscribe?token=${token}`
