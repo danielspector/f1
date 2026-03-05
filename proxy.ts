@@ -10,8 +10,9 @@ export default auth((req) => {
 
   // Allow public auth pages
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
-    // Redirect authenticated users away from auth pages
-    if (isLoggedIn) {
+    // Redirect authenticated users away from auth pages (except reset-password
+    // and unsubscribe, which should always be accessible via email links)
+    if (isLoggedIn && !pathname.startsWith('/reset-password') && !pathname.startsWith('/unsubscribe')) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
     return NextResponse.next()
