@@ -28,8 +28,8 @@ export default auth((req) => {
     return NextResponse.next()
   }
 
-  // Protect dashboard and league routes
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/league')) {
+  // Protect dashboard, league, and admin routes
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/league') || pathname.startsWith('/admin')) {
     if (!isLoggedIn) {
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('callbackUrl', req.url)

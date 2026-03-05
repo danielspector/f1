@@ -37,6 +37,7 @@ vi.mock('@/lib/prisma', () => {
 // Mock auth helpers
 vi.mock('@/lib/auth-helpers', () => ({
   requireSession: vi.fn(),
+  requireSuperAdmin: vi.fn(),
 }))
 
 // Mock auth

@@ -9,6 +9,11 @@ export async function GET() {
 
   const userId = session!.user.id
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperAdmin: true },
+  })
+
   const memberships = await prisma.leagueMember.findMany({
     where: { userId },
     include: {
@@ -68,7 +73,10 @@ export async function GET() {
     }),
   )
 
-  return NextResponse.json(leagues, {
+  return NextResponse.json({
+    leagues,
+    isSuperAdmin: user?.isSuperAdmin ?? false,
+  }, {
     headers: { 'Cache-Control': 'private, max-age=30' },
   })
 }

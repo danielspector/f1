@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [leagues, setLeagues] = useState<DashboardLeague[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -30,7 +31,9 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/dashboard')
       if (!res.ok) throw new Error()
-      setLeagues(await res.json())
+      const data = await res.json()
+      setLeagues(data.leagues)
+      setIsSuperAdmin(data.isSuperAdmin)
     } catch {
       setError(true)
     } finally {
@@ -50,12 +53,22 @@ export default function DashboardPage() {
         <h1 className="font-bold text-white">
           <span className="text-[#e10600]">F1</span> League
         </h1>
-        <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          className="text-sm text-gray-500 hover:text-white transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          {isSuperAdmin && (
+            <Link
+              href="/admin"
+              className="text-sm text-[#e10600] hover:text-[#ff2d28] transition-colors font-medium"
+            >
+              Admin
+            </Link>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="text-sm text-gray-500 hover:text-white transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6">
