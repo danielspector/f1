@@ -29,16 +29,16 @@ describe('ingestRaceResults', () => {
     db.race.findUnique.mockResolvedValue(race)
 
     mockFetchRaceResults.mockResolvedValue([
-      { driverCode: 'VER', position: 1, points: 25 },
-      { driverCode: 'NOR', position: 2, points: 18 },
-      { driverCode: 'LEC', position: 3, points: 15 },
-      { driverCode: 'HAM', position: 4, points: 12 },
-      { driverCode: 'PIA', position: 5, points: 10 },
-      { driverCode: 'RUS', position: 6, points: 8 },
-      { driverCode: 'SAI', position: 7, points: 6 },
-      { driverCode: 'ALO', position: 8, points: 4 },
-      { driverCode: 'GAS', position: 9, points: 2 },
-      { driverCode: 'STR', position: 10, points: 1 },
+      { driverCode: 'VER', position: 1, points: 25, status: 'Finished' },
+      { driverCode: 'NOR', position: 2, points: 18, status: 'Finished' },
+      { driverCode: 'LEC', position: 3, points: 15, status: 'Finished' },
+      { driverCode: 'HAM', position: 4, points: 12, status: 'Finished' },
+      { driverCode: 'PIA', position: 5, points: 10, status: 'Finished' },
+      { driverCode: 'RUS', position: 6, points: 8, status: 'Finished' },
+      { driverCode: 'SAI', position: 7, points: 6, status: 'Finished' },
+      { driverCode: 'ALO', position: 8, points: 4, status: 'Finished' },
+      { driverCode: 'GAS', position: 9, points: 2, status: 'Finished' },
+      { driverCode: 'STR', position: 10, points: 1, status: 'Finished' },
     ])
 
     const seatMap: Record<string, ReturnType<typeof makeSeat>> = {
@@ -66,26 +66,26 @@ describe('ingestRaceResults', () => {
 
     // Verify correct F1 points assigned per position
     const upsertCalls = db.raceResult.upsert.mock.calls
-    const pointsByPosition = upsertCalls.map((call) => ({
-      seatId: (call[0] as any).create.seatId,
-      points: (call[0] as any).create.points,
+    const pointsByPosition = upsertCalls.map((call: any) => ({
+      seatId: call[0].create.seatId,
+      points: call[0].create.points,
     }))
 
     // P1 = 25 points
-    expect(pointsByPosition.find((p) => p.seatId === 'seat_ver')?.points).toBe(25)
+    expect(pointsByPosition.find((p: any) => p.seatId === 'seat_ver')?.points).toBe(25)
     // P2 = 18 points
-    expect(pointsByPosition.find((p) => p.seatId === 'seat_nor')?.points).toBe(18)
+    expect(pointsByPosition.find((p: any) => p.seatId === 'seat_nor')?.points).toBe(18)
     // P3 = 15 points
-    expect(pointsByPosition.find((p) => p.seatId === 'seat_lec')?.points).toBe(15)
+    expect(pointsByPosition.find((p: any) => p.seatId === 'seat_lec')?.points).toBe(15)
     // P10 = 1 point
-    expect(pointsByPosition.find((p) => p.seatId === 'seat_str')?.points).toBe(1)
+    expect(pointsByPosition.find((p: any) => p.seatId === 'seat_str')?.points).toBe(1)
   })
 
   it('assigns 0 points for positions outside top 10', async () => {
     const race = makeRace({ id: 'race1', seasonYear: 2026, round: 1 })
     db.race.findUnique.mockResolvedValue(race)
 
-    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'DOO', position: 11, points: 0 }])
+    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'DOO', position: 11, points: 0, status: 'Finished' }])
 
     const seat = makeSeat({ id: 'seat_doo', driverCode: 'DOO', seasonYear: 2026 })
     db.seat.findUnique.mockResolvedValue(seat as any)
@@ -101,7 +101,7 @@ describe('ingestRaceResults', () => {
     const race = makeRace({ id: 'race1', seasonYear: 2026, round: 1 })
     db.race.findUnique.mockResolvedValue(race)
 
-    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'HAM', position: null, points: 0 }])
+    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'HAM', position: null, points: 0, status: 'Retired' }])
 
     const seat = makeSeat({ id: 'seat_ham', driverCode: 'HAM', seasonYear: 2026 })
     db.seat.findUnique.mockResolvedValue(seat as any)
@@ -118,7 +118,7 @@ describe('ingestRaceResults', () => {
     const race = makeRace({ id: 'race1', seasonYear: 2026, round: 1 })
     db.race.findUnique.mockResolvedValue(race)
 
-    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'UNKNOWN', position: 5, points: 10 }])
+    mockFetchRaceResults.mockResolvedValue([{ driverCode: 'UNKNOWN', position: 5, points: 10, status: 'Finished' }])
 
     db.seat.findUnique.mockResolvedValue(null)
 
@@ -302,8 +302,8 @@ describe('calculateScoresForRace', () => {
 
     db.pick.findMany.mockResolvedValue([pick] as any)
     db.raceResult.findMany.mockResolvedValue([
-      makeRaceResult({ raceId, seatId: 'seat_nor', position: null, points: 0 }), // DNF
-      makeRaceResult({ raceId, seatId: 'seat_pia', position: 3, points: 15 }),   // Teammate P3
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: 18, points: 0, status: 'Retired' }), // DNF
+      makeRaceResult({ raceId, seatId: 'seat_pia', position: 3, points: 15, status: 'Finished' }),   // Teammate P3
     ])
     db.seat.findFirst.mockResolvedValue(teammateSeat as any) // teammate lookup
     db.playerScore.upsert.mockResolvedValue({} as any)
@@ -331,7 +331,7 @@ describe('calculateScoresForRace', () => {
 
     db.pick.findMany.mockResolvedValue([pick] as any)
     db.raceResult.findMany.mockResolvedValue([
-      makeRaceResult({ raceId, seatId: 'seat_nor', position: 5, points: 10 }), // finished P5
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: 5, points: 10, status: 'Finished' }), // finished P5
     ])
     db.playerScore.upsert.mockResolvedValue({} as any)
     db.leagueMember.findMany.mockResolvedValue([])
@@ -360,8 +360,8 @@ describe('calculateScoresForRace', () => {
 
     db.pick.findMany.mockResolvedValue([pick] as any)
     db.raceResult.findMany.mockResolvedValue([
-      makeRaceResult({ raceId, seatId: 'seat_nor', position: null, points: 0 }), // DNF
-      makeRaceResult({ raceId, seatId: 'seat_pia', position: null, points: 0 }), // teammate also DNF
+      makeRaceResult({ raceId, seatId: 'seat_nor', position: 18, points: 0, status: 'Retired' }), // DNF
+      makeRaceResult({ raceId, seatId: 'seat_pia', position: 19, points: 0, status: 'Accident' }), // teammate also DNF
     ])
     db.seat.findFirst.mockResolvedValue(teammateSeat as any)
     db.playerScore.upsert.mockResolvedValue({} as any)

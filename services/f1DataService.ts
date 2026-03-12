@@ -71,6 +71,7 @@ export interface RaceResultItem {
   driverCode: string
   position: number | null
   points: number
+  status: string // "Finished", "+1 Lap", "Retired", "Accident", etc.
 }
 
 // ─── API response shapes ──────────────────────────────────────────────────────
@@ -194,6 +195,7 @@ export async function fetchRaceResults(year: number, round: number): Promise<Rac
       driverCode: r.Driver.code,
       position: isNaN(pos) ? null : pos,
       points: parseFloat(r.points) || 0,
+      status: r.status,
     }
   })
 }

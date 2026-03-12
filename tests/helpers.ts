@@ -146,6 +146,7 @@ export function makeRaceResult(
     seatId: string
     position: number | null
     points: number
+    status: string
   }> = {},
 ) {
   return {
@@ -154,6 +155,7 @@ export function makeRaceResult(
     seatId: overrides.seatId ?? nextId(),
     position: 'position' in overrides ? overrides.position! : 1,
     points: overrides.points ?? 25,
+    status: overrides.status ?? 'Finished',
   }
 }
 

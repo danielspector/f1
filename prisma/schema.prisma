@@ -143,11 +143,12 @@ model Pick {
 // ─── Results & Scores ────────────────────────────────────────────────────────
 
 model RaceResult {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   raceId   String
   seatId   String
   position Int? // null = DNF/DNS
-  points   Int  @default(0)
+  points   Int     @default(0)
+  status   String  @default("Finished") // "Finished", "+1 Lap", "Retired", "Accident", etc.
 
   race Race @relation(fields: [raceId], references: [id])
   seat Seat @relation(fields: [seatId], references: [id])

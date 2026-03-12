@@ -61,56 +61,66 @@ export async function getLeaderboard(leagueId: string): Promise<LeaderboardEntry
 
       const scoreByRaceId = new Map(scores.map((s) => [s.raceId, s]))
 
-      const history: RaceHistoryEntry[] = races
-        .filter((race) => new Date(race.raceDatetime) < new Date()) // only past races
-        .map((race) => {
-          const score = scoreByRaceId.get(race.id)
-          if (!score) {
-            // Missed pick
-            return {
-              raceId: race.id,
-              round: race.round,
-              raceName: race.name,
-              driverName: null,
-              teamName: null,
-              driverCode: null,
-              pointsEarned: 0,
-              resultsPending: false,
-            }
-          }
-          return {
-            raceId: race.id,
-            round: race.round,
-            raceName: race.name,
-            driverName: score.pick.seat.driverName,
-            teamName: score.pick.seat.teamName,
-            driverCode: score.pick.seat.driverCode,
-            pointsEarned: score.pointsEarned,
-            resultsPending: false,
-          }
-        })
-
-      // Also include picks for races not yet scored (results pending)
+      // Fetch all picks for this user in this league (needed for pending results)
       const picks = await prisma.pick.findMany({
         where: { leagueId, userId: member.userId },
         include: { seat: true, race: true },
       })
-      for (const pick of picks) {
-        const alreadyInHistory = history.some((h) => h.raceId === pick.raceId)
-        const raceHasPassed = new Date(pick.race.raceDatetime) < new Date()
-        if (!alreadyInHistory && raceHasPassed) {
-          history.push({
-            raceId: pick.race.id,
-            round: pick.race.round,
-            raceName: pick.race.name,
-            driverName: pick.seat.driverName,
-            teamName: pick.seat.teamName,
-            driverCode: pick.seat.driverCode,
+      const pickByRaceId = new Map(picks.map((p) => [p.raceId, p]))
+
+      // Check which races have RaceResult records (scoring has been run)
+      const racesWithResults = await prisma.raceResult.groupBy({
+        by: ['raceId'],
+        where: { raceId: { in: races.map((r) => r.id) } },
+      })
+      const scoredRaceIds = new Set(racesWithResults.map((r) => r.raceId))
+
+      const history: RaceHistoryEntry[] = races
+        .filter((race) => new Date(race.raceDatetime) < new Date()) // only past races
+        .map((race) => {
+          const score = scoreByRaceId.get(race.id)
+          if (score) {
+            return {
+              raceId: race.id,
+              round: race.round,
+              raceName: race.name,
+              driverName: score.pick.seat.driverName,
+              teamName: score.pick.seat.teamName,
+              driverCode: score.pick.seat.driverCode,
+              pointsEarned: score.pointsEarned,
+              resultsPending: false,
+            }
+          }
+
+          // No PlayerScore — check if user made a pick
+          const pick = pickByRaceId.get(race.id)
+          if (pick) {
+            // User picked but results haven't been scored yet
+            const hasResults = scoredRaceIds.has(race.id)
+            return {
+              raceId: race.id,
+              round: race.round,
+              raceName: race.name,
+              driverName: pick.seat.driverName,
+              teamName: pick.seat.teamName,
+              driverCode: pick.seat.driverCode,
+              pointsEarned: 0,
+              resultsPending: !hasResults,
+            }
+          }
+
+          // No pick — missed deadline
+          return {
+            raceId: race.id,
+            round: race.round,
+            raceName: race.name,
+            driverName: null,
+            teamName: null,
+            driverCode: null,
             pointsEarned: 0,
-            resultsPending: true,
-          })
-        }
-      }
+            resultsPending: false,
+          }
+        })
 
       history.sort((a, b) => a.round - b.round)
 

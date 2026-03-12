@@ -14,6 +14,8 @@ describe('getLeaderboard', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-15T00:00:00Z'))
+    // Default: no race results exist (scoring hasn't run)
+    db.raceResult.groupBy.mockResolvedValue([])
   })
 
   afterEach(() => {

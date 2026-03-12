@@ -173,6 +173,7 @@ describe('sendRaceSummaries', () => {
         userEmail: 'p1@test.com',
         totalPoints: 25,
         rank: 1,
+        hasCurrentPick: false,
         history: [
           {
             raceId: 'race1',
@@ -192,6 +193,7 @@ describe('sendRaceSummaries', () => {
         userEmail: 'p2@test.com',
         totalPoints: 18,
         rank: 2,
+        hasCurrentPick: false,
         history: [
           {
             raceId: 'race1',

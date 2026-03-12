@@ -14,6 +14,16 @@ const F1_POINTS: Record<number, number> = {
   10: 1,
 }
 
+const DNF_STATUSES = new Set([
+  'Retired',
+  'Accident',
+  'Collision',
+  'Disqualified',
+  'Withdrew',
+  'Not classified',
+  'Excluded',
+])
+
 /**
  * Fetches race results from the F1 API and upserts RaceResult records.
  * Returns how many results were stored.
@@ -33,12 +43,13 @@ export async function ingestRaceResults(seasonYear: number, round: number): Prom
     })
     if (!seat) continue
 
-    const points = result.position != null ? (F1_POINTS[result.position] ?? 0) : 0
+    const isDNF = DNF_STATUSES.has(result.status)
+    const points = (!isDNF && result.position != null) ? (F1_POINTS[result.position] ?? 0) : 0
 
     await prisma.raceResult.upsert({
       where: { raceId_seatId: { raceId: race.id, seatId: seat.id } },
-      update: { position: result.position, points },
-      create: { raceId: race.id, seatId: seat.id, position: result.position, points },
+      update: { position: result.position, points, status: result.status },
+      create: { raceId: race.id, seatId: seat.id, position: result.position, points, status: result.status },
     })
     count++
   }
@@ -77,8 +88,8 @@ export async function calculateScoresForRace(raceId: string): Promise<number> {
       pointsEarned *= 2
     } else if (pick.chip === 'SAFETY_NET') {
       const result = resultBySeatId.get(pick.seatId)
-      // DNF = position is null
-      if (result && result.position === null) {
+      // DNF = status indicates retirement/accident/etc.
+      if (result && DNF_STATUSES.has(result.status)) {
         // Find teammate: same team, same season, different driver
         const teammate = await prisma.seat.findFirst({
           where: {

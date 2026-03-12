@@ -14,12 +14,13 @@ export async function GET(request: Request) {
   }
 
   const now = new Date()
-  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-  // Find races that ended in the last 24 hours and don't yet have results
+  // Find any past races that don't yet have results ingested.
+  // No time-window restriction — if a race was missed (e.g. API was slow,
+  // cron timing didn't align), it will be picked up on the next run.
   const races = await prisma.race.findMany({
     where: {
-      raceDatetime: { gte: twentyFourHoursAgo, lte: now },
+      raceDatetime: { lte: now },
       results: { none: {} }, // no results yet
     },
   })
