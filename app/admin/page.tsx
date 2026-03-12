@@ -31,6 +31,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [ingesting, setIngesting] = useState(false)
+  const [ingestResult, setIngestResult] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -78,6 +80,51 @@ export default function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* Ingest Results Action */}
+        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-white text-sm font-medium">Race Results</p>
+            <p className="text-gray-500 text-xs mt-0.5">Ingest results and calculate points for all unscored races</p>
+          </div>
+          <button
+            onClick={async () => {
+              setIngesting(true)
+              setIngestResult(null)
+              try {
+                const res = await fetch('/api/admin/ingest-all-results', { method: 'POST' })
+                const data = await res.json()
+                if (!res.ok) {
+                  setIngestResult(`Error: ${data.error}`)
+                } else if (data.processed.length === 0) {
+                  setIngestResult('No unscored races found')
+                } else {
+                  const summary = data.processed.map((r: { name: string; resultsIngested: number; scoresUpdated: number }) =>
+                    `${r.name}: ${r.resultsIngested} results, ${r.scoresUpdated} scores`
+                  ).join('; ')
+                  setIngestResult(summary)
+                }
+              } catch {
+                setIngestResult('Request failed')
+              } finally {
+                setIngesting(false)
+              }
+            }}
+            disabled={ingesting}
+            className="shrink-0 ml-4 px-4 py-2 bg-[#e10600] hover:bg-[#b00500] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {ingesting ? 'Ingesting...' : 'Ingest Results'}
+          </button>
+        </div>
+        {ingestResult && (
+          <div className={`rounded-lg px-4 py-3 mb-4 text-sm ${
+            ingestResult.startsWith('Error') || ingestResult === 'Request failed'
+              ? 'bg-red-900/30 border border-red-700 text-red-300'
+              : 'bg-green-900/30 border border-green-700 text-green-300'
+          }`}>
+            {ingestResult}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4 text-sm">
