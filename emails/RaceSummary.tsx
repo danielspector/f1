@@ -20,6 +20,14 @@ interface StandingRow {
   isCurrentUser: boolean
 }
 
+interface RaceResultRow {
+  name: string
+  driverName: string | null
+  teamName: string | null
+  pointsEarned: number
+  isCurrentUser: boolean
+}
+
 interface Props {
   playerName: string
   raceName: string
@@ -30,6 +38,7 @@ interface Props {
   leagueName: string
   leagueUrl: string
   standings: StandingRow[]
+  raceResults: RaceResultRow[]
   unsubscribeUrl: string
 }
 
@@ -43,6 +52,7 @@ export default function RaceSummary({
   leagueName,
   leagueUrl,
   standings,
+  raceResults,
   unsubscribeUrl,
 }: Props) {
   const topStandings = standings.slice(0, 10)
@@ -97,6 +107,61 @@ export default function RaceSummary({
                 No pick submitted — 0 pts
               </Text>
             )}
+          </Section>
+
+          {/* Per-race results for the league */}
+          <Heading style={{ color: '#f5f5f5', fontSize: '16px', marginTop: '24px' }}>
+            League picks this race
+          </Heading>
+
+          <Section
+            style={{
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #2a2a2a',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              marginBottom: '8px',
+            }}
+          >
+            {raceResults.map((row, i) => (
+              <Row
+                key={`${row.name}-${i}`}
+                style={{
+                  padding: '10px 16px',
+                  borderBottom: i < raceResults.length - 1 ? '1px solid #2a2a2a' : 'none',
+                  backgroundColor: row.isCurrentUser ? 'rgba(225, 6, 0, 0.08)' : 'transparent',
+                }}
+              >
+                <Column
+                  style={{ color: row.isCurrentUser ? '#ffffff' : '#d4d4d4', fontSize: '14px' }}
+                >
+                  {row.name}
+                  {row.isCurrentUser ? ' (you)' : ''}
+                </Column>
+                <Column
+                  style={{
+                    color: row.driverName ? '#9ca3af' : '#6b6b6b',
+                    fontSize: '13px',
+                    textAlign: 'right',
+                    paddingRight: '12px',
+                    fontStyle: row.driverName ? 'normal' : 'italic',
+                  }}
+                >
+                  {row.driverName ?? 'no pick'}
+                </Column>
+                <Column
+                  style={{
+                    width: '60px',
+                    textAlign: 'right',
+                    color: '#ffffff',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {row.pointsEarned} pts
+                </Column>
+              </Row>
+            ))}
           </Section>
 
           {/* Standings */}

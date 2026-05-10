@@ -112,6 +112,22 @@ export async function sendRaceSummaries(raceId: string): Promise<void> {
         isCurrentUser: e.userId === member.userId,
       }))
 
+      // Per-race breakdown: each league member's pick + points for THIS race.
+      // Sorted by points earned this race (desc) so top performers surface first;
+      // ties broken by name for stability.
+      const raceResults = leaderboard
+        .map((e) => {
+          const h = e.history.find((x) => x.raceId === raceId)
+          return {
+            name: e.userName || e.userEmail,
+            driverName: h?.driverName ?? null,
+            teamName: h?.teamName ?? null,
+            pointsEarned: h?.pointsEarned ?? 0,
+            isCurrentUser: e.userId === member.userId,
+          }
+        })
+        .sort((a, b) => b.pointsEarned - a.pointsEarned || a.name.localeCompare(b.name))
+
       const html = await render(
         React.createElement(RaceSummary, {
           playerName: member.user.name || member.user.email,
@@ -123,6 +139,7 @@ export async function sendRaceSummaries(raceId: string): Promise<void> {
           leagueName: league.name,
           leagueUrl: `${APP_URL}/league/${league.id}`,
           standings,
+          raceResults,
           unsubscribeUrl: unsubscribeUrl(member.user.unsubscribeToken),
         }),
       )
