@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Leaderboard from '@/components/Leaderboard'
 import RaceCalendar from '@/components/RaceCalendar'
 import AdminPanel from '@/components/AdminPanel'
+import RaceWeekendCard from '@/components/RaceWeekendCard'
 import type { LeaderboardEntry } from '@/services/leagueService'
 
 type Tab = 'standings' | 'calendar' | 'admin'
@@ -34,6 +35,18 @@ interface RaceItem {
 
 interface PickItem { raceId: string; driverCode: string; driverName: string; chip?: 'DOUBLE_POINTS' | 'SAFETY_NET' | null }
 
+interface AllPicksResponse {
+  race: { id: string; name: string; round: number; raceDatetime: string }
+  deadlinePassed: boolean
+  allPicks: Array<{
+    userId: string
+    chip: 'DOUBLE_POINTS' | 'SAFETY_NET' | null
+    user: { id: string; name: string | null; email: string }
+    seat: { driverCode: string; driverName: string; teamName: string }
+    score: { pointsEarned: number } | null
+  }> | null
+}
+
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>()
   const { data: session } = useSession()
@@ -42,6 +55,7 @@ export default function LeaguePage() {
   const [league, setLeague] = useState<LeagueData | null>(null)
   const [races, setRaces] = useState<RaceItem[]>([])
   const [userPicks, setUserPicks] = useState<PickItem[]>([])
+  const [focusRacePicks, setFocusRacePicks] = useState<AllPicksResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('standings')
 
@@ -56,7 +70,7 @@ export default function LeaguePage() {
       if (!leagueRes.ok) { setLoading(false); return }
 
       const leagueData = await leagueRes.json()
-      const racesData = racesRes.ok ? await racesRes.json() : []
+      const racesData: RaceItem[] = racesRes.ok ? await racesRes.json() : []
       const picksData = picksRes.ok ? await picksRes.json() : []
 
       setLeague(leagueData)
@@ -67,6 +81,21 @@ export default function LeaguePage() {
         driverName: p.seat?.driverName ?? '',
         chip: p.chip ?? null,
       })))
+
+      // Focus race = the locked / results_in race users currently care about.
+      // Pick the latest race whose FP1 has passed (status != 'picking_open').
+      const focusRace = [...racesData]
+        .filter((r) => r.status !== 'picking_open')
+        .sort((a, b) => new Date(b.fp1Deadline).getTime() - new Date(a.fp1Deadline).getTime())[0]
+
+      if (focusRace) {
+        const focusRes = await fetch(`/api/leagues/${id}/picks?raceId=${focusRace.id}`)
+        if (focusRes.ok) {
+          const data = (await focusRes.json()) as AllPicksResponse
+          if (data.deadlinePassed && data.allPicks) setFocusRacePicks(data)
+        }
+      }
+
       setLoading(false)
     }
     load()
@@ -171,6 +200,29 @@ export default function LeaguePage() {
             ? races.find(r => r.status === 'picking_open')
             : null
           const pickForOpenRace = openRace ? userPicks.find(p => p.raceId === openRace.id) : null
+
+          // Build race-weekend rows: every league member with their pick (or "no pick").
+          // Hidden if no race has passed FP1 yet (e.g. brand-new season).
+          const focusCardData = (() => {
+            if (!focusRacePicks || !focusRacePicks.allPicks) return null
+            const pickByUser = new Map(focusRacePicks.allPicks.map((p) => [p.userId, p]))
+            const resultsIn = focusRacePicks.allPicks.some((p) => p.score != null)
+            const rows = league.leaderboard.map((m) => {
+              const pick = pickByUser.get(m.userId)
+              return {
+                userId: m.userId,
+                userName: m.userName,
+                userEmail: m.userEmail,
+                driverName: pick?.seat.driverName ?? null,
+                driverCode: pick?.seat.driverCode ?? null,
+                teamName: pick?.seat.teamName ?? null,
+                chip: pick?.chip ?? null,
+                pointsEarned: resultsIn ? (pick?.score?.pointsEarned ?? 0) : null,
+              }
+            })
+            return { race: focusRacePicks.race, resultsIn, rows }
+          })()
+
           return (
             <>
               {openRace && (
@@ -190,6 +242,16 @@ export default function LeaguePage() {
                     {pickForOpenRace ? 'Change →' : 'Make pick →'}
                   </span>
                 </Link>
+              )}
+              {focusCardData && (
+                <RaceWeekendCard
+                  raceName={focusCardData.race.name}
+                  round={focusCardData.race.round}
+                  raceDatetime={focusCardData.race.raceDatetime}
+                  resultsIn={focusCardData.resultsIn}
+                  rows={focusCardData.rows}
+                  currentUserId={session?.user?.id ?? ''}
+                />
               )}
               <Leaderboard entries={league.leaderboard} currentUserId={session?.user?.id ?? ''} />
             </>

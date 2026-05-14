@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Seat } from '@prisma/client'
+import { teamColor } from '@/lib/teamColors'
 
 interface SeatWithAvailability extends Seat {
   available: boolean
@@ -20,28 +21,6 @@ interface Props {
   usedChips?: ChipType[]
   currentChip?: ChipType | null
   onPickSubmitted: (seatId: string, chip?: ChipType | null) => void
-}
-
-// Team color accents
-const TEAM_COLORS: Record<string, string> = {
-  'Red Bull': '#3671C6',
-  Ferrari: '#E8002D',
-  Mercedes: '#27F4D2',
-  McLaren: '#FF8000',
-  'Aston Martin': '#229971',
-  Alpine: '#FF87BC',
-  Williams: '#64C4FF',
-  Audi: '#FF4C3B',
-  'Racing Bulls': '#6692FF',
-  Haas: '#B6BABD',
-  Cadillac: '#C0C0C0',
-}
-
-function teamColor(teamName: string): string {
-  for (const [key, color] of Object.entries(TEAM_COLORS)) {
-    if (teamName.includes(key)) return color
-  }
-  return '#6b6b6b'
 }
 
 export default function DriverSelector({
