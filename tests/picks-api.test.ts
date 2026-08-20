@@ -141,7 +141,8 @@ describe('POST /api/leagues/[id]/picks (Submit Pick)', () => {
     db.race.findUnique.mockResolvedValue(
       makeRace({ id: RACE_ID, fp1Deadline: new Date('2026-03-14T11:30:00Z') }),
     )
-    // User already has a pick for this race — all seats available for changing
+    // User already has a pick for this race; only unused seats (plus the
+    // current selection) are available for changing.
     mockGetAvailableSeats.mockResolvedValue({
       availableSeats: fullGrid,
       currentPickSeatId: SEAT_ID,

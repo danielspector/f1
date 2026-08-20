@@ -12,15 +12,17 @@ export async function hasUsedAllSeats(
   const totalSeats = await prisma.seat.count({ where: { seasonYear } })
   if (totalSeats === 0) return false
 
-  const usedSeats = await prisma.pick.count({
+  const usedSeats = await prisma.pick.findMany({
     where: {
       leagueId,
       userId,
       race: { seasonYear },
     },
+    select: { seatId: true },
+    distinct: ['seatId'],
   })
 
-  return usedSeats >= totalSeats
+  return new Set(usedSeats.map((pick) => pick.seatId)).size >= totalSeats
 }
 
 /**
@@ -28,10 +30,10 @@ export async function hasUsedAllSeats(
  *
  * Rules:
  * 1. Fetch all seats for the season.
- * 2. Fetch all prior picks for this user in this league.
- * 3. If the user has used all seats → pool resets → all seats are available.
- * 4. Otherwise seats already picked (in previous races) are excluded.
- * 5. The seat already picked for THIS race (if any) is returned as the only option (already submitted).
+ * 2. Fetch all other picks for this user in this league and season, in race order.
+ * 3. Rebuild the current pool cycle, clearing it each time every seat has been used.
+ * 4. Seats used in the current cycle are excluded.
+ * 5. The seat already picked for THIS race remains available so the pick/chip can be updated.
  */
 export async function getAvailableSeats(
   leagueId: string,
@@ -46,25 +48,35 @@ export async function getAvailableSeats(
     where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
   })
 
-  if (existingPick) {
-    // Already submitted — return current seat as the only "selected" seat
-    return { availableSeats: allSeats, currentPickSeatId: existingPick.seatId }
-  }
-
-  const allUsed = await hasUsedAllSeats(leagueId, userId, seasonYear)
-
-  if (allUsed) {
-    // Pool reset — all seats available
-    return { availableSeats: allSeats, currentPickSeatId: null }
-  }
-
-  // Find seats used in previous races (excluding current race)
+  // Rebuild the active cycle from all other picks. Clearing the set when it
+  // reaches the grid size allows a new cycle to begin without leaving the pool
+  // permanently reset after the first completed cycle.
   const priorPicks = await prisma.pick.findMany({
-    where: { leagueId, userId, NOT: { raceId } },
+    where: {
+      leagueId,
+      userId,
+      race: { seasonYear },
+      NOT: { raceId },
+    },
     select: { seatId: true },
+    orderBy: [{ race: { round: 'asc' } }, { submittedAt: 'asc' }],
   })
-  const usedSeatIds = new Set(priorPicks.map((p) => p.seatId))
-  const availableSeats = allSeats.filter((s) => !usedSeatIds.has(s.id))
 
-  return { availableSeats, currentPickSeatId: null }
+  const seatIds = new Set(allSeats.map((seat) => seat.id))
+  const usedSeatIds = new Set<string>()
+
+  for (const pick of priorPicks) {
+    // Ignore stale/cross-season seat IDs if production data contains any.
+    if (!seatIds.has(pick.seatId)) continue
+
+    usedSeatIds.add(pick.seatId)
+    if (usedSeatIds.size === allSeats.length) usedSeatIds.clear()
+  }
+
+  const currentPickSeatId = existingPick?.seatId ?? null
+  const availableSeats = allSeats.filter(
+    (seat) => !usedSeatIds.has(seat.id) || seat.id === currentPickSeatId,
+  )
+
+  return { availableSeats, currentPickSeatId }
 }

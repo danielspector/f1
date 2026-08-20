@@ -18,7 +18,7 @@ describe('Mid-season join — FR-16', () => {
   // FR-16: Players who join mid-season start with zero points
   it('new member has zero used seats', async () => {
     db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(0) // new user, no picks at all
+    db.pick.findMany.mockResolvedValue([]) // new user, no picks at all
 
     const result = await hasUsedAllSeats('league1', 'newuser', 2026)
     expect(result).toBe(false) // not all seats used — full pool available
@@ -28,8 +28,6 @@ describe('Mid-season join — FR-16', () => {
   it('new member has all 20 seats available', async () => {
     db.seat.findMany.mockResolvedValue(fullGrid)
     db.pick.findUnique.mockResolvedValue(null) // no pick for current race
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(0) // no picks at all (new user)
     db.pick.findMany.mockResolvedValue([]) // no prior picks
 
     const { availableSeats, currentPickSeatId } = await getAvailableSeats(
@@ -46,8 +44,6 @@ describe('Mid-season join — FR-16', () => {
   it('mid-season joiner can pick any driver for their first race', async () => {
     db.seat.findMany.mockResolvedValue(fullGrid)
     db.pick.findUnique.mockResolvedValue(null)
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(0)
     db.pick.findMany.mockResolvedValue([])
 
     const { availableSeats } = await getAvailableSeats('league1', 'newuser', 'race10', 2026)

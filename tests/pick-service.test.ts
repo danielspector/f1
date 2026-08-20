@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { hasUsedAllSeats, getAvailableSeats } from '@/services/pickService'
-import { makeSeat, makePick, makeFullGrid } from './helpers'
+import { makePick, makeFullGrid } from './helpers'
 import { db } from './prisma-mock'
 
 describe('hasUsedAllSeats', () => {
@@ -24,7 +24,9 @@ describe('hasUsedAllSeats', () => {
 
   it('returns false when user has used fewer seats than total', async () => {
     db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(10)
+    db.pick.findMany.mockResolvedValue(
+      makeFullGrid().slice(0, 10).map((seat) => makePick({ seatId: seat.id })),
+    )
     const result = await hasUsedAllSeats('league1', 'user1', 2026)
     expect(result).toBe(false)
   })
@@ -32,30 +34,39 @@ describe('hasUsedAllSeats', () => {
   // FR-08: Once all 20 seats have been used, the pool resets
   it('returns true when user has used exactly all 20 seats', async () => {
     db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(20)
+    db.pick.findMany.mockResolvedValue(
+      makeFullGrid().map((seat) => makePick({ seatId: seat.id })),
+    )
     const result = await hasUsedAllSeats('league1', 'user1', 2026)
     expect(result).toBe(true)
   })
 
-  it('returns true when user has used more than 20 seats (edge case after reset picks counted)', async () => {
+  it('does not treat duplicate picks as using additional seats', async () => {
     db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(21)
+    const seats = makeFullGrid().slice(0, 19)
+    db.pick.findMany.mockResolvedValue([
+      ...seats.map((seat) => makePick({ seatId: seat.id })),
+      makePick({ seatId: seats[0].id }),
+      makePick({ seatId: seats[0].id }),
+    ])
     const result = await hasUsedAllSeats('league1', 'user1', 2026)
-    expect(result).toBe(true)
+    expect(result).toBe(false)
   })
 
   it('queries picks only for the specified league and user', async () => {
     db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(5)
+    db.pick.findMany.mockResolvedValue([])
 
     await hasUsedAllSeats('leagueA', 'userB', 2026)
 
-    expect(db.pick.count).toHaveBeenCalledWith({
+    expect(db.pick.findMany).toHaveBeenCalledWith({
       where: {
         leagueId: 'leagueA',
         userId: 'userB',
         race: { seasonYear: 2026 },
       },
+      select: { seatId: true },
+      distinct: ['seatId'],
     })
   })
 })
@@ -74,8 +85,6 @@ describe('getAvailableSeats', () => {
   // FR-04: Player selects one driver seat per race weekend
   it('returns all 20 seats as available when no picks have been made', async () => {
     db.pick.findUnique.mockResolvedValue(null) // no existing pick for this race
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(0) // no picks at all
     db.pick.findMany.mockResolvedValue([]) // no prior picks
 
     const { availableSeats, currentPickSeatId } = await getAvailableSeats(
@@ -93,8 +102,6 @@ describe('getAvailableSeats', () => {
   it('excludes previously used seats from available options', async () => {
     const usedSeat = fullGrid[0]
     db.pick.findUnique.mockResolvedValue(null) // no pick for current race
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(1) // 1 pick made
     db.pick.findMany.mockResolvedValue([makePick({ seatId: usedSeat.id, raceId: 'otherRace' })])
 
     const { availableSeats, currentPickSeatId } = await getAvailableSeats(
@@ -109,11 +116,15 @@ describe('getAvailableSeats', () => {
     expect(currentPickSeatId).toBeNull()
   })
 
-  it('returns current pick seat when user has already submitted for this race', async () => {
+  it('keeps the current pick available but still excludes seats used in prior races', async () => {
     const pickedSeat = fullGrid[5]
+    const previouslyUsedSeat = fullGrid[0]
     db.pick.findUnique.mockResolvedValue(
       makePick({ seatId: pickedSeat.id, raceId, leagueId, userId }),
     )
+    db.pick.findMany.mockResolvedValue([
+      makePick({ seatId: previouslyUsedSeat.id, raceId: 'otherRace' }),
+    ])
 
     const { availableSeats, currentPickSeatId } = await getAvailableSeats(
       leagueId,
@@ -122,16 +133,18 @@ describe('getAvailableSeats', () => {
       2026,
     )
 
-    // When already picked, all seats are returned (for display) with currentPickSeatId set
-    expect(availableSeats).toHaveLength(20)
+    expect(availableSeats).toHaveLength(19)
+    expect(availableSeats).toContainEqual(pickedSeat)
+    expect(availableSeats).not.toContainEqual(previouslyUsedSeat)
     expect(currentPickSeatId).toBe(pickedSeat.id)
   })
 
   // FR-08: Once all 20 seats have been used, the player's pool resets completely
   it('resets pool and returns all seats when all 20 have been used', async () => {
     db.pick.findUnique.mockResolvedValue(null) // no pick for current race
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(20) // all seats used
+    db.pick.findMany.mockResolvedValue(
+      fullGrid.map((seat) => makePick({ seatId: seat.id, raceId: `race-${seat.id}` })),
+    )
 
     const { availableSeats, currentPickSeatId } = await getAvailableSeats(
       leagueId,
@@ -144,14 +157,25 @@ describe('getAvailableSeats', () => {
     expect(currentPickSeatId).toBeNull()
   })
 
+  it('starts tracking used seats again after a completed pool cycle', async () => {
+    db.pick.findUnique.mockResolvedValue(null)
+    db.pick.findMany.mockResolvedValue([
+      ...fullGrid.map((seat) => makePick({ seatId: seat.id, raceId: `race-${seat.id}` })),
+      makePick({ seatId: fullGrid[3].id, raceId: 'next-cycle-race' }),
+    ])
+
+    const { availableSeats } = await getAvailableSeats(leagueId, userId, raceId, 2026)
+
+    expect(availableSeats).toHaveLength(19)
+    expect(availableSeats).not.toContainEqual(fullGrid[3])
+  })
+
   // FR-09: Selection is seat-based — if a driver is replaced mid-season, the seat is still used
   it('tracks seats by seat ID not by driver name (seat-based selection)', async () => {
     // If seatId is what's tracked in picks, changing the driver on that seat
     // doesn't affect pool logic. The same seatId remains used.
     const seat = fullGrid[0] // e.g., McLaren seat 1
     db.pick.findUnique.mockResolvedValue(null)
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(1)
     db.pick.findMany.mockResolvedValue([
       makePick({ seatId: seat.id }), // Used by seatId, not driverName
     ])
@@ -163,8 +187,6 @@ describe('getAvailableSeats', () => {
 
   it('excludes only prior race picks, not the current race pick', async () => {
     db.pick.findUnique.mockResolvedValue(null) // no current pick
-    db.seat.count.mockResolvedValue(20)
-    db.pick.count.mockResolvedValue(2)
     db.pick.findMany.mockResolvedValue([
       makePick({ seatId: fullGrid[0].id, raceId: 'otherRace1' }),
       makePick({ seatId: fullGrid[1].id, raceId: 'otherRace2' }),
