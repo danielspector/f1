@@ -1,5 +1,11 @@
 import { vi } from 'vitest'
 
+// Route tests queue after-response work explicitly, without sending real email.
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: vi.fn(),
+}))
+
 // Mock Prisma client — use a plain object with vi.fn() mocks.
 // We cast to `any` in test files to avoid Prisma's complex generic types
 // conflicting with vi.fn() mock types.

@@ -34,7 +34,7 @@ export async function ingestRaceResults(seasonYear: number, round: number): Prom
   })
   if (!race) throw new Error(`Race not found: season ${seasonYear} round ${round}`)
 
-  const results = await fetchRaceResults(seasonYear, round)
+  const results = await fetchRaceResults(seasonYear, round, race)
   let count = 0
 
   for (const result of results) {

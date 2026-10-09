@@ -27,6 +27,8 @@
  *   Constructor (constructorId, name), status (Finished / +1 Lap / Retired / etc.).
  */
 
+import { raceIdentity } from '../lib/raceIdentity'
+
 const BASE_URL = process.env.JOLPICA_BASE_URL || 'https://api.jolpi.ca/ergast/f1'
 
 export class F1ApiError extends Error {
@@ -181,13 +183,29 @@ export async function fetchDriverRoster(year: number): Promise<DriverRosterItem[
   return [...lastYearRoster, ...newDrivers]
 }
 
-export async function fetchRaceResults(year: number, round: number): Promise<RaceResultItem[]> {
+export async function fetchRaceResults(
+  year: number,
+  round: number,
+  expectedRace?: { name: string; circuit: string; raceDatetime: Date },
+): Promise<RaceResultItem[]> {
   const data = await jolpicaFetch<{
-    MRData: { RaceTable: { Races: Array<{ Results: JolpicaResult[] }> } }
+    MRData: { RaceTable: { Races: Array<JolpicaRace & { Results: JolpicaResult[] }> } }
   }>(`/${year}/${round}/results.json`, 600)
 
   const races = data.MRData.RaceTable.Races
   if (!races.length) return []
+
+  const actual = races[0]
+  if (
+    expectedRace &&
+    (raceIdentity({ name: actual.raceName, circuit: actual.Circuit.circuitName }) !==
+      raceIdentity(expectedRace) ||
+      actual.date !== expectedRace.raceDatetime.toISOString().slice(0, 10))
+  ) {
+    throw new F1ApiError(
+      `Results for round ${round} belong to ${actual.raceName}, not the stored race ${expectedRace.name}. Sync the schedule before ingesting.`,
+    )
+  }
 
   return races[0].Results.map((r) => {
     const pos = parseInt(r.position, 10)

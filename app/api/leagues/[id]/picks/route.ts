@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { SubmitPickSchema } from '@/lib/validators'
 import { isFP1Passed } from '@/lib/deadlines'
 import { getAvailableSeats } from '@/services/pickService'
+import { queuePickConfirmation } from '@/services/pickConfirmationService'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -175,12 +176,18 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const chipValue = chip ?? null
+  const previousPick = await prisma.pick.findUnique({
+    where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
+    select: { seatId: true, chip: true },
+  })
   const pick = await prisma.pick.upsert({
     where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
     update: { seatId, chip: chipValue },
     create: { leagueId, userId, raceId, seatId, chip: chipValue },
     include: { seat: true, race: true },
   })
+
+  queuePickConfirmation({ ...pick, leagueId, userId }, previousPick)
 
   return NextResponse.json(pick, { status: 201 })
 }

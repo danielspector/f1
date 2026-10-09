@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fetchSeasonSchedule, fetchDriverRoster } from '@/services/f1DataService'
+import { ScheduleConflictError, syncSeasonSchedule } from '@/services/scheduleService'
 
 function verifyAdminKey(request: Request): boolean {
   const key = request.headers.get('x-admin-key')
-  return key === process.env.ADMIN_API_KEY
+  return !!process.env.ADMIN_API_KEY && key === process.env.ADMIN_API_KEY
 }
 
 export async function POST(request: Request) {
@@ -14,35 +15,21 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}))
   const yearRaw = body.seasonYear ?? new Date().getFullYear()
-  const year = typeof yearRaw === 'number' && yearRaw >= 2024 && yearRaw <= 2100
-    ? yearRaw
-    : new Date().getFullYear()
+  const year =
+    typeof yearRaw === 'number' && yearRaw >= 2024 && yearRaw <= 2100
+      ? yearRaw
+      : new Date().getFullYear()
 
-  const [schedule, roster] = await Promise.all([
-    fetchSeasonSchedule(year),
-    fetchDriverRoster(year),
-  ])
+  const [schedule, roster] = await Promise.all([fetchSeasonSchedule(year), fetchDriverRoster(year)])
 
-  let racesUpserted = 0
-  for (const race of schedule) {
-    await prisma.race.upsert({
-      where: { seasonYear_round: { seasonYear: year, round: race.round } },
-      update: {
-        name: race.name,
-        circuit: race.circuit,
-        fp1Deadline: race.fp1Datetime,
-        raceDatetime: race.raceDatetime,
-      },
-      create: {
-        seasonYear: year,
-        round: race.round,
-        name: race.name,
-        circuit: race.circuit,
-        fp1Deadline: race.fp1Datetime,
-        raceDatetime: race.raceDatetime,
-      },
-    })
-    racesUpserted++
+  let raceSync
+  try {
+    raceSync = await syncSeasonSchedule(prisma, year, schedule)
+  } catch (error) {
+    if (error instanceof ScheduleConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
+    throw error
   }
 
   let seatsUpserted = 0
@@ -60,5 +47,5 @@ export async function POST(request: Request) {
     seatsUpserted++
   }
 
-  return NextResponse.json({ racesUpserted, seatsUpserted })
+  return NextResponse.json({ ...raceSync, seatsUpserted })
 }

@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# Private production recovery snapshots
+/backups/
+
 # next.js
 /.next/
 /out/

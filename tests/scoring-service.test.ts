@@ -23,6 +23,15 @@ describe('ingestRaceResults', () => {
     await expect(ingestRaceResults(2026, 1)).rejects.toThrow('Race not found')
   })
 
+  it('passes the stored event to the API and refuses to write mismatched results', async () => {
+    const race = makeRace({ name: 'Singapore Grand Prix', round: 16 })
+    db.race.findUnique.mockResolvedValue(race)
+    mockFetchRaceResults.mockRejectedValueOnce(new Error('Results belong to Bahrain'))
+    await expect(ingestRaceResults(2026, 16)).rejects.toThrow('Results belong to Bahrain')
+    expect(mockFetchRaceResults).toHaveBeenCalledWith(2026, 16, race)
+    expect(db.raceResult.upsert).not.toHaveBeenCalled()
+  })
+
   // FR-10: Standard F1 points system: 25-18-15-12-10-8-6-4-2-1
   it('creates race results from F1 API data with correct point values', async () => {
     const race = makeRace({ id: 'race1', seasonYear: 2026, round: 1 })

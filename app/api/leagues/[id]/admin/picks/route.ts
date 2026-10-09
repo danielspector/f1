@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { calculateScoresForRace } from '@/services/scoringService'
+import { queuePickConfirmation } from '@/services/pickConfirmationService'
 import { z } from 'zod'
 
 const AdminPickSchema = z.object({
@@ -57,12 +58,18 @@ export async function POST(request: Request, { params }: Params) {
 
   // Upsert — no deadline or seat-availability check; admin can override
   const chipValue = chip ?? null
+  const previousPick = await prisma.pick.findUnique({
+    where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
+    select: { seatId: true, chip: true },
+  })
   const pick = await prisma.pick.upsert({
     where: { leagueId_userId_raceId: { leagueId, userId, raceId } },
     update: { seatId, chip: chipValue },
     create: { leagueId, userId, raceId, seatId, chip: chipValue },
     include: { seat: true, race: true },
   })
+
+  queuePickConfirmation({ ...pick, leagueId, userId }, previousPick, true)
 
   // If results are already ingested for this race, recalculate scores immediately
   // so the new pick is reflected in standings without waiting for the next cron run.

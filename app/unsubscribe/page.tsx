@@ -16,11 +16,7 @@ function UnsubscribeForm() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (!token) {
-      setError('Missing unsubscribe token.')
-      setLoading(false)
-      return
-    }
+    if (!token) return
 
     fetch(`/api/email/unsubscribe?token=${encodeURIComponent(token)}`)
       .then((res) => {
@@ -78,7 +74,7 @@ function UnsubscribeForm() {
     setSaving(false)
   }
 
-  if (loading) {
+  if (loading && token) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
         <p className="text-neutral-400">Loading...</p>
@@ -86,12 +82,12 @@ function UnsubscribeForm() {
     )
   }
 
-  if (error) {
+  if (error || !token) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
         <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-8 max-w-md text-center">
           <h1 className="text-xl font-bold text-white mb-2">Email Preferences</h1>
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-400">{error || 'Missing unsubscribe token.'}</p>
         </div>
       </div>
     )
@@ -103,6 +99,10 @@ function UnsubscribeForm() {
         <h1 className="text-2xl font-bold text-red-600 mb-1">F1 League</h1>
         <h2 className="text-lg font-semibold text-white mb-1">Email Preferences</h2>
         <p className="text-neutral-400 text-sm mb-6">{email}</p>
+        <p className="text-neutral-400 text-sm mb-6">
+          These preferences control reminders and race summaries. You&apos;ll still receive a
+          confirmation when your pick is saved or changed.
+        </p>
 
         {saved && (
           <div className="bg-green-900/30 border border-green-800 rounded-md p-3 mb-6">
@@ -156,7 +156,7 @@ function UnsubscribeForm() {
             disabled={saving}
             className="w-full bg-transparent hover:bg-neutral-800 disabled:opacity-50 text-neutral-400 hover:text-white border border-neutral-700 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors"
           >
-            Unsubscribe from all emails
+            Unsubscribe from reminders and summaries
           </button>
         </div>
       </div>

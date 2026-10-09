@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { fetchSeasonSchedule, fetchDriverRoster } from '../services/f1DataService'
+import { syncSeasonSchedule } from '../services/scheduleService'
 
 const prisma = new PrismaClient()
 
@@ -41,25 +42,7 @@ async function main() {
   const schedule = await fetchSeasonSchedule(year)
   console.log(`Found ${schedule.length} races`)
 
-  for (const race of schedule) {
-    await prisma.race.upsert({
-      where: { seasonYear_round: { seasonYear: year, round: race.round } },
-      update: {
-        name: race.name,
-        circuit: race.circuit,
-        fp1Deadline: race.fp1Datetime,
-        raceDatetime: race.raceDatetime,
-      },
-      create: {
-        seasonYear: year,
-        round: race.round,
-        name: race.name,
-        circuit: race.circuit,
-        fp1Deadline: race.fp1Datetime,
-        raceDatetime: race.raceDatetime,
-      },
-    })
-  }
+  await syncSeasonSchedule(prisma, year, schedule)
   console.log(`✓ Seeded ${schedule.length} races`)
 
   // Seed driver seats — use hardcoded roster if available, otherwise fetch from API
